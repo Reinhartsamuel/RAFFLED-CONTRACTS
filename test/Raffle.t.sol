@@ -97,6 +97,28 @@ contract RaffleTest is Test {
     //  Unit – createRaffle
     // ═════════════════════════════════════════════════════════════════════════
 
+    function test_createRaffle_EmitsSymbolAndDecimals() external {
+        vm.prank(HOST);
+        IERC20(address(prize)).approve(address(mgr), PRIZE_AMT);
+
+        uint48 expectedExpiry = uint48(block.timestamp + DURATION);
+
+        vm.expectEmit(true, true, false, true);
+        emit RaffleManager.RaffleCreated(
+            1,
+            HOST,
+            address(prize),
+            PRIZE_AMT,
+            address(0),
+            expectedExpiry,
+            "PZ",   // symbol passed to StandardERC20 constructor
+            18      // OZ ERC20 default decimals
+        );
+
+        vm.prank(HOST);
+        mgr.createRaffle(address(prize), PRIZE_AMT, address(0), TICKET_PRICE, MAX_CAP, DURATION);
+    }
+
     function test_createRaffle_StoredCorrectly() external {
         uint256 id = _createStd();
         assertEq(id, 1);

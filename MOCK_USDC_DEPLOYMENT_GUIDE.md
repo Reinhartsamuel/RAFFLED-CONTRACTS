@@ -18,11 +18,27 @@ Instead of using the real USDC on Base Sepolia, you can deploy your own MockUSDC
 cd /Users/reinhartsulilatu/repos/raffled-contract
 
 # Deploy to Base Sepolia testnet
-forge script script/DeployMockUSDC.s.sol \
+forge script script/DeployMockUSDC.s.sol --tc DeployMockUSDC \
   --rpc-url https://base-sepolia.g.alchemy.com/v2/51MRDeFHeLtd5FrWrTMv0bsusLfs5n8r \
   --broadcast \
+  --verify \
+  --etherscan-api-key $ETHERSCAN_API_KEY \
   -vvv
 ```
+
+```bash
+cd /Users/reinhartsulilatu/repos/raffled-contract
+
+# Deploy to RaffleManager to Base Sepolia testnet
+forge script script/Deploy.s.sol --tc Deploy \
+  --rpc-url https://base-sepolia.g.alchemy.com/v2/51MRDeFHeLtd5FrWrTMv0bsusLfs5n8r \
+  --broadcast \
+  --verify \
+  --etherscan-api-key $ETHERSCAN_API_KEY \
+  -vvv
+```
+
+
 
 **Expected output:**
 ```

@@ -7,6 +7,7 @@ import {AutomationCompatibleInterface}  from "./interfaces/AutomationCompatibleI
 import {ReentrancyGuard}                from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {Ownable}                        from "@openzeppelin/contracts/access/Ownable.sol";
 import {IERC20}                         from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IERC20Metadata}                 from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {SafeERC20}                      from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 /// @title  RaffleManager
@@ -92,7 +93,16 @@ contract RaffleManager is
     // Events
     // ──────────────────────────────────────────────────────────────────────
 
-    event RaffleCreated   (uint256 indexed raffleId, address indexed host, address prizeAsset, uint256 prizeAmount, address paymentAsset, uint48 expiry);
+    event RaffleCreated   (
+        uint256 indexed raffleId, 
+        address indexed host, 
+        address prizeAsset,
+        uint256 prizeAmount, 
+        address paymentAsset, 
+        uint48 expiry,
+        string prizeSymbol,
+        uint256 decimals
+    );
     event TicketPurchased (uint256 indexed raffleId, address indexed buyer,  uint256 ticketCount);
     event RaffleCancelled (uint256 indexed raffleId);
     event WinnerPicked    (uint256 indexed raffleId, address indexed winner);
@@ -170,7 +180,10 @@ contract RaffleManager is
         // Lock prize – SafeERC20 handles non-standard return values
         IERC20(_asset).safeTransferFrom(msg.sender, address(this), _amount);
 
-        emit RaffleCreated(raffleId, msg.sender, _asset, _amount, _paymentAsset, uint48(block.timestamp + _duration));
+        uint256 prizeDecimals = IERC20Metadata(_asset).decimals();
+        string memory prizeSymbol = IERC20Metadata(_asset).symbol();
+
+        emit RaffleCreated(raffleId, msg.sender, _asset, _amount, _paymentAsset, uint48(block.timestamp + _duration), prizeSymbol, prizeDecimals);
     }
 
     /// @notice Buy one or more tickets.  Each ticket pushes msg.sender into

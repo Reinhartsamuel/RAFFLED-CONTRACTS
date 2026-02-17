@@ -31,4 +31,15 @@ contract MockUSDC {
         _bal[from]               -= amount;
         _bal[to]                 += amount;
     }
+    function symbol() public pure returns (string memory) {
+        return "USDC";
+    }
+
+    function decimals() public pure returns (uint8) {
+        return 6;
+    }
+
+    function name() public pure returns (string memory) {
+        return "Mock USD Coin";
+    }
 }
