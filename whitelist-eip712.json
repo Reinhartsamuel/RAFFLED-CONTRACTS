@@ -1,0 +1,10 @@
+{
+  "signer": "0x14dC79964da2C08b23698B3D3cc7Ca32193d9955",
+  "contractAddress": "0xaF5d21301B0454538836FcdC857eeFd7A0A96733",
+  "chainId": 84532,
+  "entry": {
+    "address": "0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65",
+    "raffleId": 1,
+    "signature": "0x82f1a97b713f459c062f015675ad9366b586483f0109fb66445d92462af4c76545e8fe509d308a4ecedaad64a9ea3fe2450decda3f0ea8663451c3e96f24fbc31c"
+  }
+}
