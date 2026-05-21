@@ -31,30 +31,33 @@ contract Deploy4 is Script {
         // ── Load configuration ──────────────────────────────────────────────
         uint256 deployerKey = vm.envOr("DEPLOYER_PRIVATE_KEY", uint256(0));
 
-        address vrfCoordinator = vm.envOr(
-            "VRF_COORDINATOR",
-            address(0x5C210eF41CD1a72de73bF76eC39637bB0d3d7BEE) // Base Sepolia default
+        address vrfCoordinator = vm.envAddress(
+            "VRF_COORDINATOR"
+            // address(0x5C210eF41CD1a72de73bF76eC39637bB0d3d7BEE) // Base Sepolia default
         );
-        bytes32 keyHash = vm.envOr(
-            "KEY_HASH",
-            bytes32(0x9e1344a1247c8a1785d0a4681a27152bffdb43666ae5bf7d14d24a5efd44bf71) // Base Sepolia default
+        bytes32 keyHash = vm.envBytes32(
+            "KEY_HASH"
+            // bytes32(0x9e1344a1247c8a1785d0a4681a27152bffdb43666ae5bf7d14d24a5efd44bf71) // Base Sepolia default
         );
-        uint256 subId = vm.envOr("SUB_ID", uint256(1));
+        uint256 subId = vm.envUint(
+            "SUB_ID"
+            // uint256(1)
+        );
 
-        address paymentToken = vm.envOr(
-            "MOCK_USDC",
-            address(0x417dae58f22f6C105DfC0f18B2cF3495CD07Bd72) // Mock USDC default
+        address paymentToken = vm.envAddress(
+            "MOCK_USDC"
+            // address(0x417dae58f22f6C105DfC0f18B2cF3495CD07Bd72) // Mock USDC default
         );
-        address treasury = vm.envOr(
-            "MOCK_TREASURY",
-            address(0x753dFC03b4d37B3a316D0Fe5aB9F677C0D3C20f8) // Default treasury
+        address treasury = vm.envAddress(
+            "MOCK_TREASURY"
+            // address(0x753dFC03b4d37B3a316D0Fe5aB9F677C0D3C20f8) // Default treasury
         );
         address trustedSigner = vm.envOr(
             "TRUSTED_SIGNER",
             deployerKey != 0 ? vm.addr(deployerKey) : address(0)
         );
 
-        uint256 initialFeeBps = vm.envOr("INITIAL_FEE_BPS", uint256(0));
+        uint256 initialFeeBps = vm.envOr("INITIAL_FEE_BPS", uint256(500));
 
         // ── Validate critical params ────────────────────────────────────────
         require(vrfCoordinator != address(0), "VRF_COORDINATOR required");

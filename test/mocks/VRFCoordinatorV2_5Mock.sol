@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import {VRFV2PlusClient} from "../../src/interfaces/VRFV2PlusClient.sol";
+import {VRFV2PlusClient} from "chainlink/contracts/src/v0.8/vrf/dev/libraries/VRFV2PlusClient.sol";
 
 /// @notice Minimal VRF Coordinator v2.5 mock for local Foundry testing.
 ///         Exposes `lastRequestId` so tests can grab the ID after

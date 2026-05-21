@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import {VRFV2PlusClient} from "./VRFV2PlusClient.sol";
+import {VRFV2PlusClient} from "chainlink/contracts/src/v0.8/vrf/dev/libraries/VRFV2PlusClient.sol";
 
 /// @notice Coordinator interface used by the consumer base (local shim).
 interface IVRFCoordinatorV2Plus {

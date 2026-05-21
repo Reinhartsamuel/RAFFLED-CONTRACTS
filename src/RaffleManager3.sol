@@ -2,8 +2,8 @@
 pragma solidity ^0.8.24;
 
 import {VRFConsumerBaseV2Plus}          from "./interfaces/VRFConsumerBaseV2Plus.sol";
-import {VRFV2PlusClient}                from "./interfaces/VRFV2PlusClient.sol";
-import {AutomationCompatibleInterface}  from "./interfaces/AutomationCompatibleInterface.sol";
+import {VRFV2PlusClient}                from "chainlink/contracts/src/v0.8/vrf/dev/libraries/VRFV2PlusClient.sol";
+import {AutomationCompatibleInterface}  from "chainlink/contracts/src/v0.8/automation/interfaces/AutomationCompatibleInterface.sol";
 import {ReentrancyGuard}                from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {Ownable}                        from "@openzeppelin/contracts/access/Ownable.sol";
 import {IERC20}                         from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -370,7 +370,7 @@ contract RaffleManager3 is
                 callbackGasLimit:     CALLBACK_GAS_LIMIT,
                 numWords:             NUM_WORDS,
                 extraArgs:            VRFV2PlusClient._argsToBytes(
-                    VRFV2PlusClient.ExtraArgsV2Plus({ nativePayment: false })
+                    VRFV2PlusClient.ExtraArgsV1({ nativePayment: false })
                 )
             })
         );

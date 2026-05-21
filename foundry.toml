@@ -8,7 +8,8 @@ single-line-func-calls = true
 
 remappings = [
     "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
+    "@chainlink/contracts/=lib/chainlink/contracts/"
 ]
 
 [etherscan]
-base-sepolia = { key = "${ETHERSCAN_API_KEY}", chain = 84532, url = "https://base-sepolia.g.alchemy.com/v2/51MRDeFHeLtd5FrWrTMv0bsusLfs5n8r" }
+base-sepolia = { key = "${ETHERSCAN_API_KEY}", url = "https://api-sepolia.basescan.org/api" }
