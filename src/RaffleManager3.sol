@@ -1,11 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import {VRFConsumerBaseV2Plus}          from "./interfaces/VRFConsumerBaseV2Plus.sol";
-import {VRFV2PlusClient}                from "chainlink/contracts/src/v0.8/vrf/dev/libraries/VRFV2PlusClient.sol";
-import {AutomationCompatibleInterface}  from "chainlink/contracts/src/v0.8/automation/interfaces/AutomationCompatibleInterface.sol";
+import {VRFConsumerBaseV2Plus}          from "@chainlink/contracts/src/v0.8/vrf/dev/VRFConsumerBaseV2Plus.sol";
+import {VRFV2PlusClient}                from "@chainlink/contracts/src/v0.8/vrf/dev/libraries/VRFV2PlusClient.sol";
+import {AutomationCompatibleInterface}  from "@chainlink/contracts/src/v0.8/automation/interfaces/AutomationCompatibleInterface.sol";
 import {ReentrancyGuard}                from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-import {Ownable}                        from "@openzeppelin/contracts/access/Ownable.sol";
 import {IERC20}                         from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IERC20Metadata}                 from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {SafeERC20}                      from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -42,8 +41,7 @@ contract RaffleManager3 is
     VRFConsumerBaseV2Plus,
     AutomationCompatibleInterface,
     IERC721Receiver,
-    ReentrancyGuard,
-    Ownable
+    ReentrancyGuard
 {
     using SafeERC20 for IERC20;
 
@@ -166,7 +164,6 @@ contract RaffleManager3 is
         address _treasury
     )
         VRFConsumerBaseV2Plus(_vrfCoordinator)
-        Ownable(msg.sender)
     {
         if (_paymentToken == address(0) || _treasury == address(0))
             revert InvalidParams();
@@ -384,7 +381,7 @@ contract RaffleManager3 is
     // ──────────────────────────────────────────────────────────────────────
 
     /// @inheritdoc VRFConsumerBaseV2Plus
-    function fulfillRandomWords(uint256 _requestId, uint256[] memory _randomWords)
+    function fulfillRandomWords(uint256 _requestId, uint256[] calldata _randomWords)
         internal override nonReentrant
     {
         uint256 raffleId = requestIdToRaffleId[_requestId];

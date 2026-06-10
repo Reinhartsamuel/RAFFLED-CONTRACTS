@@ -443,7 +443,7 @@ forge snapshot
 anvil
 
 # Deploy script
-forge script script/Deploy.s.sol --rpc-url $RPC_URL --broadcast
+forge script script/Deploy4.s.sol --rpc-url $RPC_URL --broadcast --verify --etherscan-api-key $ETHERSCAN_API_KEY --chain-id 84532 --private-key $DEPLOYER_PRIVATE_KEY -vvv
 
 # Verify contract on Blockscout
 forge verify-contract --watch --rpc-url $RPC_URL <contract> src/RaffleManager4.sol:RaffleManager4 --verifier blockscout --etherscan-api-key $ETHERSCAN_API_KEY --chain-id 84532 --verifier-url "https://base-sepolia.blockscout.com/api/"

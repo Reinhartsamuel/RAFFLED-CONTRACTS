@@ -142,7 +142,7 @@ contract Raffle4Test is Test {
     }
 
     function test_minDurationIsTwoHours() external {
-        assertEq(mgr.MIN_DURATION(), 2 hours);
+        assertEq(mgr.minDuration(), 2 hours);
     }
 
     // ═════════════════════════════════════════════════════════════════════════
@@ -677,11 +677,29 @@ contract Raffle4Test is Test {
         uint256 id = _createERC20();
         _enterAs(ALICE, id, 10);
         _warp();
-        _triggerUpkeep();
+        uint256 reqId = _triggerUpkeep();
         assertTrue(mgr.getRaffle(id).underfilled);
-        // Calling performUpkeep again should not return prize again
-        // Since status is still OPEN, it would try to request VRF again
-        // After VRF fulfill, the raffle is COMPLETED so no double return
+        assertEq(uint8(mgr.getRaffle(id).status), uint8(RaffleManager4.RaffleStatus.PENDING_VRF));
+
+        uint256 preHostPrize = prize.balanceOf(HOST);
+
+        // Second performUpkeep must NOT revert — status is PENDING_VRF, early-returns
+        mgr.performUpkeep(abi.encode(id));
+
+        // CheckUpkeep should also return false (skips PENDING_VRF raffles)
+        (bool needed,) = mgr.checkUpkeep("");
+        assertFalse(needed);
+
+        // Prize must NOT be transferred again
+        assertEq(prize.balanceOf(HOST), preHostPrize);
+
+        // VRF fulfill should still work
+        uint256 pool   = 10 * TICKET_PRICE;
+        uint256 fee    = (pool * FEE_BPS) / 10_000;
+        uint256 preAlice = usdc.balanceOf(ALICE);
+        _fulfillVRF(reqId, 0);
+        assertEq(usdc.balanceOf(ALICE) - preAlice, pool - fee);
+        assertEq(uint8(mgr.getRaffle(id).status), uint8(RaffleManager4.RaffleStatus.COMPLETED));
     }
 
     // ═════════════════════════════════════════════════════════════════════════
@@ -1060,13 +1078,13 @@ contract Raffle4Test is Test {
     }
 
     function fuzz_duration_MustBeAboveMinimum(uint256 duration) external {
-        if (duration < mgr.MIN_DURATION()) {
+        if (duration < mgr.minDuration()) {
             vm.prank(HOST);
             IERC20(address(prize)).approve(address(mgr), PRIZE_AMT);
             vm.prank(HOST);
             vm.expectRevert(
                 abi.encodeWithSelector(
-                    RaffleManager4.DurationTooShort.selector, duration, mgr.MIN_DURATION()
+                    RaffleManager4.DurationTooShort.selector, duration, mgr.minDuration()
                 )
             );
             mgr.createRaffleERC20(address(prize), PRIZE_AMT, TICKET_PRICE, MAX_CAP, duration);

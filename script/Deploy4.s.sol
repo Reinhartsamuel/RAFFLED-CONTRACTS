@@ -85,6 +85,8 @@ contract Deploy4 is Script {
             // On live chains this requires a second tx after 2 days
         }
 
+        raffle.setMinDuration(1 minutes); // Set min duration to 1 minute for testing; can be updated later by owner
+
         if (deployerKey != 0) {
             vm.stopBroadcast();
         }
