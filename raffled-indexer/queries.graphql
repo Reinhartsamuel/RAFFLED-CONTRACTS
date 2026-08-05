@@ -1,0 +1,91 @@
+# Ponder 0.17 GraphQL queries for the Raffled frontend.
+# List queries return paginated connections: { items, pageInfo, totalCount }.
+# BigInt/Hex fields are returned as strings.
+
+# Get all active raffles
+query ActiveRaffles {
+  raffles(
+    where: { status: OPEN }
+    orderBy: "createdAt"
+    orderDirection: "desc"
+    limit: 50
+  ) {
+    items {
+      id
+      host
+      prizeAsset
+      prizeType
+      prizeSymbol
+      ticketPrice
+      maxCap
+      totalTickets
+      expiry
+      status
+      createdAt
+    }
+  }
+}
+
+# Get raffle detail with participants
+query RaffleDetail($id: String!) {
+  raffle(id: $id) {
+    id
+    host
+    prizeAsset
+    prizeType
+    prizeAmountOrTokenId
+    prizeSymbol
+    prizeDecimals
+    ticketPrice
+    maxCap
+    totalTickets
+    expiry
+    status
+    underfilled
+    winner
+    createdAt
+    resolvedAt
+  }
+  participants(
+    where: { raffleId: $id }
+    orderBy: "ticketCount"
+    orderDirection: "desc"
+  ) {
+    items {
+      user
+      ticketCount
+      isWinner
+    }
+  }
+  events(
+    where: { raffleId: $id }
+    orderBy: "blockTimestamp"
+    orderDirection: "desc"
+  ) {
+    items {
+      eventName
+      from
+      data
+      blockTimestamp
+      txHash
+    }
+  }
+}
+
+# Activity feed
+query Activity($limit: Int!) {
+  events(
+    orderBy: "blockTimestamp"
+    orderDirection: "desc"
+    limit: $limit
+  ) {
+    items {
+      eventName
+      raffleId
+      from
+      data
+      txHash
+      blockTimestamp
+    }
+  }
+}

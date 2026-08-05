@@ -11,22 +11,31 @@ import {RaffledCore} from "../src/RaffledCore.sol";
 ///   VRF_COORDINATOR       – Chainlink VRF v2.5 Coordinator address
 ///   KEY_HASH              – Chainlink key hash for gas lane
 ///   SUB_ID                – Chainlink VRF subscription ID
-///   PAYMENT_TOKEN         – ERC-20 token address for ticket payments (e.g. USDC)
+///   PAYMENT_TOKEN         – ERC-20 token address for ticket payments.
+///                            Optional on Base mainnet — defaults to native
+///                            Circle USDC (0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913).
+///                            REQUIRED on Base Sepolia (set to your mock USDC).
 ///   TREASURY              – Treasury address that receives platform fees
 ///   TRUSTED_SIGNER        – Backend signer address for free entry EIP-712 signatures
 ///   INITIAL_FEE_BPS       – (optional) Initial platform fee in basis points, default 0
 ///
-/// DRY-RUN (no broadcast, simulation only):
-///   forge script script/Deploy4.s.sol:Deploy4 --rpc-url $RPC_URL -vvv
+/// BASE SEPOLIA (dry-run first):
+///   forge script script/Deploy7.s.sol --rpc-url $BASE_SEPOLIA_RPC_URL -vvv
+///   forge script script/Deploy7.s.sol --rpc-url $BASE_SEPOLIA_RPC_URL --broadcast --verify -vvv
 ///
-/// BROADCAST (real deployment):
-///   forge script script/Deploy4.s.sol:Deploy4 --rpc-url $RPC_URL --broadcast --verify -vvv
+/// BASE MAINNET (only when the first paying pilot signs):
+///   forge script script/Deploy7.s.sol \
+///     --rpc-url $BASE_MAINNET_RPC_URL \
+///     --private-key $DEPLOYER_PRIVATE_KEY \
+///     --broadcast \
+///     --verify \
+///     --etherscan-api-key $BASESCAN_API_KEY
 ///
 /// LOCAL TESTING (Anvil, no env vars needed):
-///   forge script script/Deploy4.s.sol:Deploy4
+///   forge script script/Deploy7.s.sol
 ///
 
-contract Deploy4 is Script {
+contract Deploy7 is Script {
     function run() external returns (RaffledCore raffle) {
         // ── Load configuration ──────────────────────────────────────────────
         uint256 deployerKey = vm.envOr("DEPLOYER_PRIVATE_KEY", uint256(0));
@@ -44,14 +53,11 @@ contract Deploy4 is Script {
             // uint256(1)
         );
 
-        address paymentToken = vm.envAddress(
-            "MOCK_USDC"
-            // address(0x417dae58f22f6C105DfC0f18B2cF3495CD07Bd72) // Mock USDC default
+        address paymentToken = vm.envOr(
+            "PAYMENT_TOKEN",
+            address(0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913) // native Circle USDC on Base mainnet
         );
-        address treasury = vm.envAddress(
-            "MOCK_TREASURY"
-            // address(0x753dFC03b4d37B3a316D0Fe5aB9F677C0D3C20f8) // Default treasury
-        );
+        address treasury = vm.envAddress("TREASURY");
         address trustedSigner = vm.envOr(
             "TRUSTED_SIGNER",
             deployerKey != 0 ? vm.addr(deployerKey) : address(0)
@@ -111,7 +117,7 @@ contract Deploy4 is Script {
         console.log("1. Add RaffledCore as VRF consumer on vrf.chain.link");
         console.log("2. Fund VRF subscription with LINK");
         console.log("3. If INITIAL_FEE_BPS > 0, call applyFeeChange() after 2 days");
-        console.log("4. Verify: forge verify-contract <address> src/RaffledCore.sol:RaffledCore");
+        console.log("4. Verify: forge verify-contract <address> src/RaffledCore.sol:RaffledCore --chain <8453|84532>");
         console.log("===========================================");
 
         return raffle;
