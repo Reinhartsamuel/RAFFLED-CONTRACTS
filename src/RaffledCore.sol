@@ -129,7 +129,9 @@ contract RaffledCore is
         uint256 prizeAmountOrTokenId,
         uint48 expiry,
         string prizeSymbol,
-        uint256 decimals
+        uint256 decimals,
+        uint256 ticketPrice,
+        uint256 maxCap
     );
     event TicketPurchased(
         uint256 indexed raffleId,
@@ -148,6 +150,7 @@ contract RaffledCore is
     event FeeChangeProposed(uint256 newFeeBps, uint256 effectiveAt);
     event FeeChangeApplied(uint256 oldFeeBps, uint256 newFeeBps);
     event RaffleEmergencyFinalized(uint256 indexed raffleId);
+    event RaffleExpiredCancelled(uint256 indexed raffleId);
     event UnderfilledPayout(
         uint256 indexed raffleId,
         address indexed winner,
@@ -190,6 +193,8 @@ contract RaffledCore is
     error VRFTimeoutNotReached();
     error RaffleNotCancelled(uint256 raffleId);
     error NoRefundAvailable();
+    error RaffleNotExpired(uint256 raffleId);
+    error RaffleAlreadyRequestedVRF(uint256 raffleId);
 
     // ──────────────────────────────────────────────────────────────────────
     // Constructor
@@ -288,6 +293,28 @@ contract RaffledCore is
         emit RaffleEmergencyFinalized(_raffleId);
     }
 
+    /// @notice Cancel a raffle that expired without getting a VRF request.
+    ///         Permissionless — anyone can call. Only callable when:
+    ///         - status == OPEN
+    ///         - past expiry
+    ///         - VRF was never requested (raffleVrfRequestedAt == 0)
+    ///         Returns prize to host and enables participant refunds.
+    function cancelExpiredRaffle(uint256 _raffleId) external nonReentrant {
+        RaffleData storage raffle = raffles[_raffleId];
+        if (raffle.status != RaffleStatus.OPEN)
+            revert RaffleNotOpen(_raffleId);
+        if (block.timestamp < raffle.expiry)
+            revert RaffleNotExpired(_raffleId);
+        if (raffleVrfRequestedAt[_raffleId] != 0)
+            revert RaffleAlreadyRequestedVRF(_raffleId);
+
+        raffle.status = RaffleStatus.CANCELLED;
+
+        _returnPrizeToHost(_raffleId, raffle);
+
+        emit RaffleExpiredCancelled(_raffleId);
+    }
+
     // ──────────────────────────────────────────────────────────────────────
     // ERC-721 receiver
     // ──────────────────────────────────────────────────────────────────────
@@ -345,7 +372,9 @@ contract RaffledCore is
             _amount,
             uint48(block.timestamp + _duration),
             sym,
-            dec
+            dec,
+            _ticketPrice,
+            _maxCap
         );
     }
 
@@ -390,7 +419,9 @@ contract RaffledCore is
             _tokenId,
             uint48(block.timestamp + _duration),
             sym,
-            0
+            0,
+            _ticketPrice,
+            _maxCap
         );
     }
 
@@ -483,9 +514,10 @@ contract RaffledCore is
             }
         }
 
-        // Wrap: if cursor > 1, scan from 1 up to cursor with remaining batch budget
-        if (start > 1 && count < CHECK_UPKEEP_BATCH) {
-            for (uint256 i = 1; i < start && count < CHECK_UPKEEP_BATCH; ) {
+        // Wrap: if cursor > 1, scan from 1 up to cursor with its own budget
+        if (start > 1) {
+            uint256 wrapCount;
+            for (uint256 i = 1; i < start && wrapCount < CHECK_UPKEEP_BATCH; ) {
                 if (
                     raffles[i].status == RaffleStatus.OPEN &&
                     block.timestamp >= raffles[i].expiry
@@ -494,7 +526,7 @@ contract RaffledCore is
                 }
                 unchecked {
                     ++i;
-                    ++count;
+                    ++wrapCount;
                 }
             }
         }

@@ -227,7 +227,7 @@ contract RaffledCoreTest is Test {
         vm.expectEmit(true, true, false, true);
         emit RaffledCore.RaffleCreated(
             1, HOST, address(prizeToken), RaffledCore.PrizeType.ERC20,
-            PRIZE_AMT, uint48(block.timestamp + DURATION), "PZ", 18
+            PRIZE_AMT, uint48(block.timestamp + DURATION), "PZ", 18, TICKET_PRICE, MAX_CAP
         );
         mgr.createRaffleERC20(address(prizeToken), PRIZE_AMT, TICKET_PRICE, MAX_CAP, DURATION);
     }
@@ -330,7 +330,7 @@ contract RaffledCoreTest is Test {
         vm.expectEmit(true, true, false, true);
         emit RaffledCore.RaffleCreated(
             1, HOST, address(nft), RaffledCore.PrizeType.ERC721,
-            NFT_TOKEN_ID, uint48(block.timestamp + DURATION), "MockNFT", 0
+            NFT_TOKEN_ID, uint48(block.timestamp + DURATION), "MockNFT", 0, TICKET_PRICE, MAX_CAP
         );
         mgr.createRaffleERC721(address(nft), NFT_TOKEN_ID, TICKET_PRICE, MAX_CAP, DURATION);
     }
@@ -619,6 +619,18 @@ contract RaffledCoreTest is Test {
         vm.prank(BOB);
         vm.expectRevert(abi.encodeWithSelector(RaffledCore.MaxCapReached.selector, raffleId));
         mgr.enterFreeRaffle(raffleId, signature);
+    }
+
+    function test_EnterFreeRaffle_RevertWrongRaffle() external {
+        uint256 raffleId1 = _createERC20Raffle();
+        uint256 raffleId2 = _createERC20Raffle();
+
+        // Signature is bound to raffleId1 — cannot be replayed on raffleId2
+        bytes memory signature = _signFreeEntry(raffleId1, ALICE);
+
+        vm.prank(ALICE);
+        vm.expectRevert(FreeEntryVerifier2.InvalidSigner.selector);
+        mgr.enterFreeRaffle(raffleId2, signature);
     }
 
     // ═════════════════════════════════════════════════════════════════════════
@@ -1005,6 +1017,106 @@ contract RaffledCoreTest is Test {
         
         // Should not have received prize again
         assertEq(hostBalanceAfter, hostBalanceBefore);
+    }
+
+    // ═════════════════════════════════════════════════════════════════════════
+    //  Cancel Expired Raffle Tests (expired but VRF never requested)
+    // ═════════════════════════════════════════════════════════════════════════
+
+    function test_CancelExpiredRaffle_Success() external {
+        uint256 raffleId = _createERC20Raffle();
+        _enterAs(ALICE, raffleId, 5);
+
+        _warpPastExpiry();
+
+        mgr.cancelExpiredRaffle(raffleId);
+
+        RaffledCore.RaffleData memory raffle = mgr.getRaffle(raffleId);
+        assertEq(uint256(raffle.status), 3); // CANCELLED
+
+        // Prize should be returned to host
+        assertEq(IERC20(address(prizeToken)).balanceOf(HOST), 50_000e18);
+    }
+
+    function test_CancelExpiredRaffle_EmitsEvent() external {
+        uint256 raffleId = _createERC20Raffle();
+
+        _warpPastExpiry();
+
+        vm.expectEmit(true, false, false, false);
+        emit RaffledCore.RaffleExpiredCancelled(raffleId);
+        mgr.cancelExpiredRaffle(raffleId);
+    }
+
+    function test_CancelExpiredRaffle_EnablesRefunds() external {
+        uint256 raffleId = _createERC20Raffle();
+        _enterAs(ALICE, raffleId, 5);
+
+        _warpPastExpiry();
+        mgr.cancelExpiredRaffle(raffleId);
+
+        uint256 refundable = mgr.refundableAmount(raffleId, ALICE);
+        assertGt(refundable, 0);
+
+        uint256 balanceBefore = IERC20(address(usdc)).balanceOf(ALICE);
+        vm.prank(ALICE);
+        mgr.claimRefund(raffleId);
+        uint256 balanceAfter = IERC20(address(usdc)).balanceOf(ALICE);
+
+        assertEq(balanceAfter - balanceBefore, refundable);
+    }
+
+    function test_CancelExpiredRaffle_RevertNotExpired() external {
+        uint256 raffleId = _createERC20Raffle();
+
+        // Still within duration
+        vm.expectRevert(abi.encodeWithSelector(RaffledCore.RaffleNotExpired.selector, raffleId));
+        mgr.cancelExpiredRaffle(raffleId);
+    }
+
+    function test_CancelExpiredRaffle_RevertRaffleNotOpen_PendingVRF() external {
+        uint256 raffleId = _createERC20Raffle();
+        _enterAs(ALICE, raffleId, 1);
+
+        _warpPastExpiry();
+        _triggerUpkeep(); // status -> PENDING_VRF (VRF already requested)
+
+        vm.expectRevert(abi.encodeWithSelector(RaffledCore.RaffleNotOpen.selector, raffleId));
+        mgr.cancelExpiredRaffle(raffleId);
+    }
+
+    function test_CancelExpiredRaffle_RevertRaffleNotOpen_Completed() external {
+        uint256 raffleId = _createERC20Raffle();
+        _enterAs(ALICE, raffleId, 1);
+
+        _warpPastExpiry();
+        uint256 requestId = _triggerUpkeep();
+        _fulfillVRF(requestId, 1); // status -> COMPLETED
+
+        vm.expectRevert(abi.encodeWithSelector(RaffledCore.RaffleNotOpen.selector, raffleId));
+        mgr.cancelExpiredRaffle(raffleId);
+    }
+
+    function test_CancelExpiredRaffle_ERC721_ReturnsNFT() external {
+        uint256 raffleId = _createERC721Raffle();
+        _enterAs(ALICE, raffleId, 1);
+
+        _warpPastExpiry();
+        mgr.cancelExpiredRaffle(raffleId);
+
+        // NFT should be returned to host
+        assertEq(IERC721(address(nft)).ownerOf(NFT_TOKEN_ID), HOST);
+    }
+
+    function test_CancelExpiredRaffle_ZeroParticipants() external {
+        uint256 raffleId = _createERC20Raffle();
+
+        _warpPastExpiry();
+        mgr.cancelExpiredRaffle(raffleId);
+
+        RaffledCore.RaffleData memory raffle = mgr.getRaffle(raffleId);
+        assertEq(uint256(raffle.status), 3); // CANCELLED
+        assertEq(IERC20(address(prizeToken)).balanceOf(HOST), 50_000e18);
     }
 
     // ═════════════════════════════════════════════════════════════════════════

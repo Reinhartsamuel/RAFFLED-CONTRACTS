@@ -1,9 +1,9 @@
-#!/usr/bin/env -S deno run --allow-read --allow-write
+#!/usr/bin/env -S deno run --allow-read --allow-write --allow-env
 
 import { getAddress, Wallet, ethers } from "npm:ethers@6";
 
 const EIP712_DOMAIN = {
-  name: "RaffleManager7", // TODO: change this to RaffledCore
+  name: "RaffledCore",
   version: "1",
   chainId: 84532,
   verifyingContract: "0x0000000000000000000000000000000000000000",
