@@ -13,7 +13,7 @@ import {IERC721Receiver} from "@openzeppelin/contracts/token/ERC721/IERC721Recei
 import {IERC721Metadata} from "@openzeppelin/contracts/token/ERC721/extensions/IERC721Metadata.sol";
 import {FreeEntryVerifier2} from "./FreeEntryVerifier2.sol";
 
-/// @title  RaffleManager7
+/// @title  RaffledCore
 /// @notice Gas-optimised raffle system backed by Chainlink VRF v2.5 and Automation.
 ///         Supports ERC-20 tokens *or* ERC-721 NFTs as the raffle prize.
 ///         USDC-only ticket payments. Underfilled raffles return the prize to the
@@ -25,11 +25,10 @@ import {FreeEntryVerifier2} from "./FreeEntryVerifier2.sol";
 ///         - V7 ARCHITECTURAL UPGRADE 1: Binary search for O(log N) winner selection
 ///         - V7 ARCHITECTURAL UPGRADE 2: O(1) pull-based refunds via separate mapping (DoS proof)
 ///         - V7 ARCHITECTURAL UPGRADE 3: TicketRange reduced to 1 storage slot (removed amountPaid)
-///         - V7 ARCHITECTURAL UPGRADE 4: Consolidated ERC721 claim state into single struct (1 slot)
-///         - V7 ARCHITECTURAL UPGRADE 5: refundableAmount uses uint256 to prevent any overflow
+///         - V7 ARCHITECTURAL UPGRADE 4: refundableAmount uses uint256 to prevent any overflow
 ///
-///   Storage packing: 5 EVM slots per raffle. 1 EVM slot per ticket range. 1 EVM slot per ERC721 claim.
-contract RaffleManager7 is
+///   Storage packing: 5 EVM slots per raffle. 1 EVM slot per ticket range.
+contract RaffledCore is
     VRFConsumerBaseV2Plus,
     AutomationCompatibleInterface,
     IERC721Receiver,
@@ -52,13 +51,6 @@ contract RaffleManager7 is
         ERC20,
         ERC721
     }
-    enum ERC721ClaimStatus {
-        NONE,
-        CLAIMABLE,
-        CLAIMED,
-        EXPIRED,
-        CANCELLED
-    }
 
     struct RaffleData {
         address host; // 20 B  ┐
@@ -78,12 +70,6 @@ contract RaffleManager7 is
         uint96 endTicket; // 12 B ┘
     }
 
-    struct ERC721ClaimData {
-        address winner; // 20 B ┐ Slot 0
-        uint48 claimableAt; // 6 B  │
-        ERC721ClaimStatus status; // 1 B ┘
-    }
-
     // ──────────────────────────────────────────────────────────────────────
     // State
     // ──────────────────────────────────────────────────────────────────────
@@ -98,9 +84,6 @@ contract RaffleManager7 is
     mapping(uint256 => uint48) private raffleVrfRequestedAt;
 
     uint256 public raffleCount;
-
-    /// @notice Consolidated ERC-721 claim state (1 storage slot).
-    mapping(uint256 => ERC721ClaimData) public erc721Claims;
 
     /// @notice O(1) refund accounting per user per raffle.
     mapping(uint256 => mapping(address => uint256)) public refundableAmount;
@@ -129,9 +112,6 @@ contract RaffleManager7 is
 
     /// @notice How long to wait before a stuck PENDING_VRF raffle can be emergency-finalized.
     uint256 public constant VRF_TIMEOUT = 24 hours;
-
-    /// @notice How long the winner has to claim an ERC-721 prize before the host can reclaim.
-    uint256 public constant ERC721_CLAIM_TIMEOUT = 30 days;
 
     // CheckUpkeep pagination ───────────────────────────────────────────────
     uint256 public lastCheckedRaffleId;
@@ -168,7 +148,6 @@ contract RaffleManager7 is
     event FeeChangeProposed(uint256 newFeeBps, uint256 effectiveAt);
     event FeeChangeApplied(uint256 oldFeeBps, uint256 newFeeBps);
     event RaffleEmergencyFinalized(uint256 indexed raffleId);
-    event ERC721PrizeReady(uint256 indexed raffleId, address indexed winner);
     event UnderfilledPayout(
         uint256 indexed raffleId,
         address indexed winner,
@@ -193,7 +172,6 @@ contract RaffleManager7 is
         uint256 prizeFee,
         uint256 paymentFee
     );
-    event ERC721ClaimExpired(uint256 indexed raffleId, address indexed host);
     event RefundClaimed(uint256 indexed raffleId, address indexed user, uint256 amount);
 
     // ──────────────────────────────────────────────────────────────────────
@@ -210,10 +188,6 @@ contract RaffleManager7 is
     error DurationTooShort(uint256 requested, uint256 minimum);
     error RaffleNotPendingVRF(uint256 raffleId);
     error VRFTimeoutNotReached();
-    error NoPendingPrize();
-    error NotWinner();
-    error ClaimTimeoutNotReached();
-    error NotRaffleHost();
     error RaffleNotCancelled(uint256 raffleId);
     error NoRefundAvailable();
 
@@ -291,7 +265,6 @@ contract RaffleManager7 is
             revert VRFTimeoutNotReached();
 
         raffle.status = RaffleStatus.CANCELLED;
-        erc721Claims[_raffleId].status = ERC721ClaimStatus.CANCELLED;
         delete raffleVrfRequestedAt[_raffleId];
 
         // Return prize to host (skip if already returned by performUpkeep for underfilled raffles)
@@ -627,77 +600,13 @@ contract RaffleManager7 is
 
         raffle.status = RaffleStatus.COMPLETED;
 
-        // ERC-721 full-fill: pull-based to avoid onERC721Received reverts
         if (raffle.prizeType == PrizeType.ERC721 && !raffle.underfilled) {
-            erc721Claims[raffleId] = ERC721ClaimData({
-                winner: winner,
-                claimableAt: uint48(block.timestamp),
-                status: ERC721ClaimStatus.CLAIMABLE
-            });
-            emit ERC721PrizeReady(raffleId, winner);
+            _distributeERC721(raffleId, raffle, winner);
         } else {
             _distribute(raffleId, raffle, winner);
         }
 
         emit WinnerPicked(raffleId, winner);
-    }
-
-    // ──────────────────────────────────────────────────────────────────────
-    // ERC-721 Prize Claim (pull-based)
-    // ──────────────────────────────────────────────────────────────────────
-
-    /// @notice Claim an ERC-721 prize after VRF or manual winner selection.
-    ///         Uses transferFrom (no onERC721Received callback) so contract
-    ///         winners can receive the NFT without implementing IERC721Receiver.
-    function claimERC721Prize(uint256 _raffleId) external nonReentrant {
-        ERC721ClaimData storage claim = erc721Claims[_raffleId];
-        if (claim.status != ERC721ClaimStatus.CLAIMABLE) revert NoPendingPrize();
-        if (msg.sender != claim.winner) revert NotWinner();
-
-        claim.status = ERC721ClaimStatus.CLAIMED;
-        claim.winner = address(0);
-        claim.claimableAt = 0;
-
-        _distributeERC721(_raffleId, raffles[_raffleId], msg.sender);
-    }
-
-    /// @notice Reclaim unclaimed ERC-721 prize and payment pool after ERC721_CLAIM_TIMEOUT.
-    ///         Only the raffle host can call. Returns NFT and USDC to the host.
-    function hostReclaimUnclaimed(uint256 _raffleId) external nonReentrant {
-        ERC721ClaimData storage claim = erc721Claims[_raffleId];
-        if (claim.status != ERC721ClaimStatus.CLAIMABLE) revert NoPendingPrize();
-
-        RaffleData storage raffle = raffles[_raffleId];
-        if (msg.sender != raffle.host) revert NotRaffleHost();
-        if (block.timestamp < claim.claimableAt + ERC721_CLAIM_TIMEOUT) revert ClaimTimeoutNotReached();
-
-        claim.status = ERC721ClaimStatus.EXPIRED;
-        claim.winner = address(0);
-        claim.claimableAt = 0;
-
-        // Return NFT to host
-        IERC721(raffle.prizeAsset).transferFrom(
-            address(this),
-            raffle.host,
-            raffle.prizeAmountOrTokenId
-        );
-
-        // Return payment pool to host
-        uint256 paymentPool = rafflePaymentPool[_raffleId];
-        uint256 paymentFee = _computeFee(paymentPool);
-        if (paymentFee > 0) {
-            IERC20(paymentToken).safeTransfer(treasury, paymentFee);
-        }
-
-        delete rafflePaymentPool[_raffleId];
-        if (paymentPool > 0) {
-            IERC20(paymentToken).safeTransfer(
-                raffle.host,
-                paymentPool - paymentFee
-            );
-        }
-
-        emit ERC721ClaimExpired(_raffleId, raffle.host);
     }
 
     // ──────────────────────────────────────────────────────────────────────
@@ -739,13 +648,6 @@ contract RaffleManager7 is
     ) external view returns (address owner, uint256 endTicket) {
         TicketRange storage range = ticketRanges[_raffleId][_index];
         return (range.owner, range.endTicket);
-    }
-
-    function getERC721Claim(
-        uint256 _raffleId
-    ) external view returns (address winner, uint256 claimableAt, ERC721ClaimStatus status) {
-        ERC721ClaimData storage claim = erc721Claims[_raffleId];
-        return (claim.winner, claim.claimableAt, claim.status);
     }
 
     // ──────────────────────────────────────────────────────────────────────
@@ -891,7 +793,6 @@ contract RaffleManager7 is
     }
 
     /// @dev Distribute ERC-721 prize via transferFrom (no onERC721Received callback).
-    ///      Winner explicitly claims, so the receiver check is unnecessary.
     function _distributeERC721(
         uint256 _raffleId,
         RaffleData storage _raffle,

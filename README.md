@@ -443,13 +443,13 @@ forge snapshot
 anvil
 
 # Deploy script
-forge script script/Deploy4.s.sol --rpc-url $RPC_URL --broadcast --verify --etherscan-api-key $ETHERSCAN_API_KEY --chain-id 84532 --private-key $DEPLOYER_PRIVATE_KEY -vvv
+forge script script/Deploy7.s.sol --rpc-url $RPC_URL --broadcast --verify --etherscan-api-key $ETHERSCAN_API_KEY --chain-id 84532 --private-key $DEPLOYER_PRIVATE_KEY -vvv
 
 # Verify contract on Blockscout
-forge verify-contract --watch --rpc-url $RPC_URL <contract> src/RaffleManager4.sol:RaffleManager4 --verifier blockscout --etherscan-api-key $ETHERSCAN_API_KEY --chain-id 84532 --verifier-url "https://base-sepolia.blockscout.com/api/"
+forge verify-contract --watch --rpc-url $RPC_URL 0xc17eee20B4990021bE9cc8eCB7833706465bb8b9 src/RaffledCore.sol:RaffledCore --verifier blockscout --etherscan-api-key $ETHERSCAN_API_KEY --chain-id 84532 --verifier-url "https://base-sepolia.blockscout.com/api/"
 
 # Verify contract on Basescan
-forge verify-contract --watch --rpc-url $RPC_URL <contract> src/RaffleManager4.sol:RaffleManager4 --verifier etherscan --etherscan-api-key $ETHERSCAN_API_KEY --chain-id 84532 --verifier-url "https://api.etherscan.io/v2/api?chainid=84532/"
+forge verify-contract --watch --rpc-url $RPC_URL 0xc17eee20B4990021bE9cc8eCB7833706465bb8b9 src/RaffledCore.sol:RaffledCore --verifier etherscan --etherscan-api-key $ETHERSCAN_API_KEY --chain-id 84532 --verifier-url "https://api.etherscan.io/v2/api?chainid=84532/"
 
 
 # Get contract ABI

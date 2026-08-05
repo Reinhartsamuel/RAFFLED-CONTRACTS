@@ -2,7 +2,7 @@
 pragma solidity ^0.8.24;
 
 import {Test}                   from "forge-std/Test.sol";
-import {RaffleManager7}         from "../src/RaffleManager7.sol";
+import {RaffledCore}         from "../src/RaffledCore.sol";
 import {FreeEntryVerifier2}     from "../src/FreeEntryVerifier2.sol";
 import {VRFCoordinatorV2_5Mock} from "./mocks/VRFCoordinatorV2_5Mock.sol";
 import {StandardERC20}          from "./mocks/StandardERC20.sol";
@@ -10,8 +10,8 @@ import {MockERC721}             from "./mocks/MockERC721.sol";
 import {IERC20}                 from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IERC721}                from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 
-contract RaffleManager7Test is Test {
-    RaffleManager7         mgr;
+contract RaffledCoreTest is Test {
+    RaffledCore         mgr;
     VRFCoordinatorV2_5Mock coord;
     StandardERC20          prizeToken;
     StandardERC20          usdc;
@@ -25,6 +25,8 @@ contract RaffleManager7Test is Test {
     address TREASURY;
     address SIGNER;
     uint256 SIGNER_PK;
+
+    uint8 constant RAFFLED_CORE_VERSION = 7;
 
     bytes32 constant KEYHASH      = keccak256("test_keyhash");
     uint256 constant SUB_ID       = 1;
@@ -55,7 +57,7 @@ contract RaffleManager7Test is Test {
         usdc  = new StandardERC20("USDC", "USDC", 1_000_000e18);
         nft   = new MockERC721();
 
-        mgr = new RaffleManager7(
+        mgr = new RaffledCore(
             address(coord), KEYHASH, SUB_ID, address(usdc), TREASURY, SIGNER
         );
 
@@ -153,7 +155,7 @@ contract RaffleManager7Test is Test {
             bytes1(0x01),
             keccak256(abi.encode(
                 keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
-                keccak256(bytes("RaffleManager7")),
+                keccak256(bytes("RaffledCore")),
                 keccak256(bytes("1")),
                 block.chainid,
                 address(mgr)
@@ -174,22 +176,22 @@ contract RaffleManager7Test is Test {
     }
 
     function test_Constructor_RevertInvalidPaymentToken() external {
-        vm.expectRevert(RaffleManager7.InvalidParams.selector);
-        new RaffleManager7(
+        vm.expectRevert(RaffledCore.InvalidParams.selector);
+        new RaffledCore(
             address(coord), KEYHASH, SUB_ID, address(0), TREASURY, SIGNER
         );
     }
 
     function test_Constructor_RevertInvalidTreasury() external {
-        vm.expectRevert(RaffleManager7.InvalidParams.selector);
-        new RaffleManager7(
+        vm.expectRevert(RaffledCore.InvalidParams.selector);
+        new RaffledCore(
             address(coord), KEYHASH, SUB_ID, address(usdc), address(0), SIGNER
         );
     }
 
     function test_Constructor_RevertInvalidSigner() external {
         vm.expectRevert("Invalid signer");
-        new RaffleManager7(
+        new RaffledCore(
             address(coord), KEYHASH, SUB_ID, address(usdc), TREASURY, address(0)
         );
     }
@@ -204,7 +206,7 @@ contract RaffleManager7Test is Test {
         assertEq(raffleId, 1);
         assertEq(mgr.raffleCount(), 1);
         
-        RaffleManager7.RaffleData memory raffle = mgr.getRaffle(raffleId);
+        RaffledCore.RaffleData memory raffle = mgr.getRaffle(raffleId);
         assertEq(raffle.host, HOST);
         assertEq(raffle.prizeAsset, address(prizeToken));
         assertEq(uint256(raffle.prizeType), 0); // PrizeType.ERC20
@@ -223,8 +225,8 @@ contract RaffleManager7Test is Test {
         
         vm.prank(HOST);
         vm.expectEmit(true, true, false, true);
-        emit RaffleManager7.RaffleCreated(
-            1, HOST, address(prizeToken), RaffleManager7.PrizeType.ERC20,
+        emit RaffledCore.RaffleCreated(
+            1, HOST, address(prizeToken), RaffledCore.PrizeType.ERC20,
             PRIZE_AMT, uint48(block.timestamp + DURATION), "PZ", 18
         );
         mgr.createRaffleERC20(address(prizeToken), PRIZE_AMT, TICKET_PRICE, MAX_CAP, DURATION);
@@ -244,7 +246,7 @@ contract RaffleManager7Test is Test {
         IERC20(address(prizeToken)).approve(address(mgr), PRIZE_AMT);
         
         vm.prank(HOST);
-        vm.expectRevert(RaffleManager7.InvalidParams.selector);
+        vm.expectRevert(RaffledCore.InvalidParams.selector);
         mgr.createRaffleERC20(address(prizeToken), 0, TICKET_PRICE, MAX_CAP, DURATION);
     }
 
@@ -253,7 +255,7 @@ contract RaffleManager7Test is Test {
         IERC20(address(prizeToken)).approve(address(mgr), PRIZE_AMT);
         
         vm.prank(HOST);
-        vm.expectRevert(RaffleManager7.InvalidParams.selector);
+        vm.expectRevert(RaffledCore.InvalidParams.selector);
         mgr.createRaffleERC20(address(prizeToken), PRIZE_AMT, 0, MAX_CAP, DURATION);
     }
 
@@ -262,7 +264,7 @@ contract RaffleManager7Test is Test {
         IERC20(address(prizeToken)).approve(address(mgr), PRIZE_AMT);
         
         vm.prank(HOST);
-        vm.expectRevert(RaffleManager7.InvalidParams.selector);
+        vm.expectRevert(RaffledCore.InvalidParams.selector);
         mgr.createRaffleERC20(address(prizeToken), PRIZE_AMT, TICKET_PRICE, 0, DURATION);
     }
 
@@ -271,7 +273,7 @@ contract RaffleManager7Test is Test {
         IERC20(address(prizeToken)).approve(address(mgr), PRIZE_AMT);
         
         vm.prank(HOST);
-        vm.expectRevert(RaffleManager7.InvalidParams.selector);
+        vm.expectRevert(RaffledCore.InvalidParams.selector);
         mgr.createRaffleERC20(address(prizeToken), PRIZE_AMT, TICKET_PRICE, MAX_CAP, 0);
     }
 
@@ -281,7 +283,7 @@ contract RaffleManager7Test is Test {
         
         vm.prank(HOST);
         vm.expectRevert(abi.encodeWithSelector(
-            RaffleManager7.DurationTooShort.selector,
+            RaffledCore.DurationTooShort.selector,
             1 hours,
             2 hours
         ));
@@ -295,7 +297,7 @@ contract RaffleManager7Test is Test {
         vm.prank(HOST);
         uint256 raffleId = mgr.createRaffleERC20(address(prizeToken), PRIZE_AMT, TICKET_PRICE, MAX_CAP, 2 hours);
         
-        RaffleManager7.RaffleData memory raffle = mgr.getRaffle(raffleId);
+        RaffledCore.RaffleData memory raffle = mgr.getRaffle(raffleId);
         assertEq(raffle.expiry, block.timestamp + 2 hours);
     }
 
@@ -309,7 +311,7 @@ contract RaffleManager7Test is Test {
         assertEq(raffleId, 1);
         assertEq(mgr.raffleCount(), 1);
         
-        RaffleManager7.RaffleData memory raffle = mgr.getRaffle(raffleId);
+        RaffledCore.RaffleData memory raffle = mgr.getRaffle(raffleId);
         assertEq(raffle.host, HOST);
         assertEq(raffle.prizeAsset, address(nft));
         assertEq(uint256(raffle.prizeType), 1); // PrizeType.ERC721
@@ -326,8 +328,8 @@ contract RaffleManager7Test is Test {
         
         vm.prank(HOST);
         vm.expectEmit(true, true, false, true);
-        emit RaffleManager7.RaffleCreated(
-            1, HOST, address(nft), RaffleManager7.PrizeType.ERC721,
+        emit RaffledCore.RaffleCreated(
+            1, HOST, address(nft), RaffledCore.PrizeType.ERC721,
             NFT_TOKEN_ID, uint48(block.timestamp + DURATION), "MockNFT", 0
         );
         mgr.createRaffleERC721(address(nft), NFT_TOKEN_ID, TICKET_PRICE, MAX_CAP, DURATION);
@@ -340,7 +342,7 @@ contract RaffleManager7Test is Test {
 
     function test_CreateERC721Raffle_RevertZeroAddress() external {
         vm.prank(HOST);
-        vm.expectRevert(RaffleManager7.InvalidParams.selector);
+        vm.expectRevert(RaffledCore.InvalidParams.selector);
         mgr.createRaffleERC721(address(0), NFT_TOKEN_ID, TICKET_PRICE, MAX_CAP, DURATION);
     }
 
@@ -349,7 +351,7 @@ contract RaffleManager7Test is Test {
         IERC721(address(nft)).approve(address(mgr), NFT_TOKEN_ID);
         
         vm.prank(HOST);
-        vm.expectRevert(RaffleManager7.InvalidParams.selector);
+        vm.expectRevert(RaffledCore.InvalidParams.selector);
         mgr.createRaffleERC721(address(nft), NFT_TOKEN_ID, 0, MAX_CAP, DURATION);
     }
 
@@ -359,7 +361,7 @@ contract RaffleManager7Test is Test {
         
         vm.prank(HOST);
         vm.expectRevert(abi.encodeWithSelector(
-            RaffleManager7.DurationTooShort.selector,
+            RaffledCore.DurationTooShort.selector,
             1 hours,
             2 hours
         ));
@@ -377,7 +379,7 @@ contract RaffleManager7Test is Test {
         
         assertEq(mgr.getTotalTickets(raffleId), 5);
         
-        RaffleManager7.RaffleData memory raffle = mgr.getRaffle(raffleId);
+        RaffledCore.RaffleData memory raffle = mgr.getRaffle(raffleId);
         assertEq(raffle.ticketsSold, 5);
         
         (address owner, uint256 endTicket) = mgr.getTicketRange(raffleId, 0);
@@ -394,7 +396,7 @@ contract RaffleManager7Test is Test {
         
         vm.prank(ALICE);
         vm.expectEmit(true, true, false, true);
-        emit RaffleManager7.TicketPurchased(raffleId, ALICE, 5);
+        emit RaffledCore.TicketPurchased(raffleId, ALICE, 5);
         mgr.enterRaffle(raffleId, 5);
     }
 
@@ -455,7 +457,7 @@ contract RaffleManager7Test is Test {
         IERC20(address(usdc)).approve(address(mgr), cost);
         
         vm.prank(ALICE);
-        vm.expectRevert(abi.encodeWithSelector(RaffleManager7.RaffleNotOpen.selector, 1));
+        vm.expectRevert(abi.encodeWithSelector(RaffledCore.RaffleNotOpen.selector, 1));
         mgr.enterRaffle(1, 1);
     }
 
@@ -466,7 +468,7 @@ contract RaffleManager7Test is Test {
         IERC20(address(usdc)).approve(address(mgr), TICKET_PRICE);
         
         vm.prank(HOST);
-        vm.expectRevert(abi.encodeWithSelector(RaffleManager7.HostCannotEnter.selector, raffleId));
+        vm.expectRevert(abi.encodeWithSelector(RaffledCore.HostCannotEnter.selector, raffleId));
         mgr.enterRaffle(raffleId, 1);
     }
 
@@ -474,7 +476,7 @@ contract RaffleManager7Test is Test {
         uint256 raffleId = _createERC20Raffle();
         
         vm.prank(ALICE);
-        vm.expectRevert(RaffleManager7.InvalidParams.selector);
+        vm.expectRevert(RaffledCore.InvalidParams.selector);
         mgr.enterRaffle(raffleId, 0);
     }
 
@@ -489,7 +491,7 @@ contract RaffleManager7Test is Test {
         IERC20(address(usdc)).approve(address(mgr), cost);
         
         vm.prank(CHARLIE);
-        vm.expectRevert(abi.encodeWithSelector(RaffleManager7.MaxCapReached.selector, raffleId));
+        vm.expectRevert(abi.encodeWithSelector(RaffledCore.MaxCapReached.selector, raffleId));
         mgr.enterRaffle(raffleId, 1);
     }
 
@@ -503,7 +505,7 @@ contract RaffleManager7Test is Test {
         IERC20(address(usdc)).approve(address(mgr), cost);
         
         vm.prank(BOB);
-        vm.expectRevert(abi.encodeWithSelector(RaffleManager7.MaxCapReached.selector, raffleId));
+        vm.expectRevert(abi.encodeWithSelector(RaffledCore.MaxCapReached.selector, raffleId));
         mgr.enterRaffle(raffleId, 5);
     }
 
@@ -531,7 +533,7 @@ contract RaffleManager7Test is Test {
         
         assertEq(mgr.getTotalTickets(raffleId), 1);
         
-        RaffleManager7.RaffleData memory raffle = mgr.getRaffle(raffleId);
+        RaffledCore.RaffleData memory raffle = mgr.getRaffle(raffleId);
         assertEq(raffle.ticketsSold, 1);
     }
 
@@ -541,7 +543,7 @@ contract RaffleManager7Test is Test {
         
         vm.prank(ALICE);
         vm.expectEmit(true, true, false, true);
-        emit RaffleManager7.TicketPurchased(raffleId, ALICE, 1);
+        emit RaffledCore.TicketPurchased(raffleId, ALICE, 1);
         mgr.enterFreeRaffle(raffleId, signature);
     }
 
@@ -595,7 +597,7 @@ contract RaffleManager7Test is Test {
         bytes memory signature = _signFreeEntry(raffleId, ALICE);
         
         vm.prank(ALICE);
-        vm.expectRevert(abi.encodeWithSelector(RaffleManager7.RaffleNotOpen.selector, raffleId));
+        vm.expectRevert(abi.encodeWithSelector(RaffledCore.RaffleNotOpen.selector, raffleId));
         mgr.enterFreeRaffle(raffleId, signature);
     }
 
@@ -604,7 +606,7 @@ contract RaffleManager7Test is Test {
         bytes memory signature = _signFreeEntry(raffleId, HOST);
         
         vm.prank(HOST);
-        vm.expectRevert(abi.encodeWithSelector(RaffleManager7.HostCannotEnter.selector, raffleId));
+        vm.expectRevert(abi.encodeWithSelector(RaffledCore.HostCannotEnter.selector, raffleId));
         mgr.enterFreeRaffle(raffleId, signature);
     }
 
@@ -615,7 +617,7 @@ contract RaffleManager7Test is Test {
         
         bytes memory signature = _signFreeEntry(raffleId, BOB);
         vm.prank(BOB);
-        vm.expectRevert(abi.encodeWithSelector(RaffleManager7.MaxCapReached.selector, raffleId));
+        vm.expectRevert(abi.encodeWithSelector(RaffledCore.MaxCapReached.selector, raffleId));
         mgr.enterFreeRaffle(raffleId, signature);
     }
 
@@ -661,7 +663,7 @@ contract RaffleManager7Test is Test {
         
         _triggerUpkeep();
         
-        RaffleManager7.RaffleData memory raffle = mgr.getRaffle(raffleId);
+        RaffledCore.RaffleData memory raffle = mgr.getRaffle(raffleId);
         assertEq(uint256(raffle.status), 2); // COMPLETED
         assertTrue(raffle.underfilled);
         
@@ -676,7 +678,7 @@ contract RaffleManager7Test is Test {
         (, bytes memory data) = mgr.checkUpkeep("");
         
         vm.expectEmit(true, false, false, false);
-        emit RaffleManager7.RaffleExpired(raffleId);
+        emit RaffledCore.RaffleExpired(raffleId);
         mgr.performUpkeep(data);
     }
 
@@ -687,7 +689,7 @@ contract RaffleManager7Test is Test {
         _warpPastExpiry();
         _triggerUpkeep();
         
-        RaffleManager7.RaffleData memory raffle = mgr.getRaffle(raffleId);
+        RaffledCore.RaffleData memory raffle = mgr.getRaffle(raffleId);
         assertTrue(raffle.underfilled);
         
         // Prize should be returned to host
@@ -701,7 +703,7 @@ contract RaffleManager7Test is Test {
         _warpPastExpiry();
         uint256 requestId = _triggerUpkeep();
         
-        RaffleManager7.RaffleData memory raffle = mgr.getRaffle(raffleId);
+        RaffledCore.RaffleData memory raffle = mgr.getRaffle(raffleId);
         assertEq(uint256(raffle.status), 1); // PENDING_VRF
         
         assertEq(requestId, 1);
@@ -735,7 +737,7 @@ contract RaffleManager7Test is Test {
         // Fulfill with random word that selects ticket 3 (should be ALICE)
         _fulfillVRF(requestId, 2);
         
-        RaffleManager7.RaffleData memory raffle = mgr.getRaffle(raffleId);
+        RaffledCore.RaffleData memory raffle = mgr.getRaffle(raffleId);
         assertEq(uint256(raffle.status), 2); // COMPLETED
     }
 
@@ -747,7 +749,7 @@ contract RaffleManager7Test is Test {
         uint256 requestId = _triggerUpkeep();
         
         vm.expectEmit(true, true, false, false);
-        emit RaffleManager7.WinnerPicked(raffleId, ALICE);
+        emit RaffledCore.WinnerPicked(raffleId, ALICE);
         _fulfillVRF(requestId, 5);
     }
 
@@ -787,7 +789,7 @@ contract RaffleManager7Test is Test {
         uint256 requestId = _triggerUpkeep();
         
         vm.expectEmit(true, true, false, true);
-        emit RaffleManager7.TokenPrizeAwarded(
+        emit RaffledCore.TokenPrizeAwarded(
             raffleId, ALICE, address(prizeToken),
             PRIZE_AMT - prizeFee, paymentPool - paymentFee,
             prizeFee, paymentFee
@@ -825,38 +827,11 @@ contract RaffleManager7Test is Test {
         uint256 requestId = _triggerUpkeep();
         
         vm.expectEmit(true, true, false, true);
-        emit RaffleManager7.UnderfilledPayout(
+        emit RaffledCore.UnderfilledPayout(
             raffleId, ALICE, address(usdc),
             paymentPool - paymentFee, paymentFee
         );
         _fulfillVRF(requestId, 2);
-    }
-
-    function test_FulfillRandomWords_ERC721FullFill_SetsClaimable() external {
-        uint256 raffleId = _createERC721RaffleWithParams(TICKET_PRICE, 10, DURATION);
-        _enterAs(ALICE, raffleId, 10);
-        
-        _warpPastExpiry();
-        uint256 requestId = _triggerUpkeep();
-        
-        _fulfillVRF(requestId, 5);
-        
-        (address winner, uint256 claimableAt, RaffleManager7.ERC721ClaimStatus status) = mgr.getERC721Claim(raffleId);
-        assertEq(winner, ALICE);
-        assertGt(claimableAt, 0);
-        assertEq(uint256(status), 1); // CLAIMABLE
-    }
-
-    function test_FulfillRandomWords_ERC721FullFill_EmitsPrizeReady() external {
-        uint256 raffleId = _createERC721RaffleWithParams(TICKET_PRICE, 10, DURATION);
-        _enterAs(ALICE, raffleId, 10);
-        
-        _warpPastExpiry();
-        uint256 requestId = _triggerUpkeep();
-        
-        vm.expectEmit(true, true, false, false);
-        emit RaffleManager7.ERC721PrizeReady(raffleId, ALICE);
-        _fulfillVRF(requestId, 5);
     }
 
     function test_FulfillRandomWords_ZeroParticipants_ReturnsPrize() external {
@@ -871,7 +846,7 @@ contract RaffleManager7Test is Test {
         mgr.performUpkeep(data);
         uint256 balanceAfter = IERC20(address(prizeToken)).balanceOf(HOST);
         
-        RaffleManager7.RaffleData memory raffle = mgr.getRaffle(raffleId);
+        RaffledCore.RaffleData memory raffle = mgr.getRaffle(raffleId);
         assertEq(uint256(raffle.status), 2); // COMPLETED
         assertTrue(raffle.underfilled);
         
@@ -880,25 +855,22 @@ contract RaffleManager7Test is Test {
     }
 
     // ═════════════════════════════════════════════════════════════════════════
-    //  ERC-721 Claim Tests
+    //  ERC-721 Full-Fill Distribution Tests
     // ═════════════════════════════════════════════════════════════════════════
 
-    function test_ClaimERC721Prize_Success() external {
+    function test_FulfillRandomWords_ERC721FullFill_DistributesImmediately() external {
         uint256 raffleId = _createERC721RaffleWithParams(TICKET_PRICE, 10, DURATION);
         _enterAs(ALICE, raffleId, 10);
-        
-        _warpPastExpiry();
-        uint256 requestId = _triggerUpkeep();
-        _fulfillVRF(requestId, 5);
         
         uint256 paymentPool = TICKET_PRICE * 10;
         uint256 expectedFee = (paymentPool * FEE_BPS) / 10_000;
         uint256 expectedHostAmount = paymentPool - expectedFee;
         
-        vm.prank(ALICE);
-        mgr.claimERC721Prize(raffleId);
+        _warpPastExpiry();
+        uint256 requestId = _triggerUpkeep();
+        _fulfillVRF(requestId, 5);
         
-        // Winner should receive NFT
+        // Winner should receive NFT immediately
         assertEq(IERC721(address(nft)).ownerOf(NFT_TOKEN_ID_2), ALICE);
         
         // Host should receive payment pool minus fee
@@ -908,182 +880,22 @@ contract RaffleManager7Test is Test {
         assertEq(IERC20(address(usdc)).balanceOf(TREASURY), expectedFee);
     }
 
-    function test_ClaimERC721Prize_EmitsNFTPrizeAwarded() external {
+    function test_FulfillRandomWords_ERC721FullFill_EmitsNFTPrizeAwarded() external {
         uint256 raffleId = _createERC721RaffleWithParams(TICKET_PRICE, 10, DURATION);
         _enterAs(ALICE, raffleId, 10);
-        
-        _warpPastExpiry();
-        uint256 requestId = _triggerUpkeep();
-        _fulfillVRF(requestId, 5);
         
         uint256 paymentPool = TICKET_PRICE * 10;
         uint256 paymentFee = (paymentPool * FEE_BPS) / 10_000;
         
-        vm.prank(ALICE);
+        _warpPastExpiry();
+        uint256 requestId = _triggerUpkeep();
+        
         vm.expectEmit(true, true, false, true);
-        emit RaffleManager7.NFTPrizeAwarded(
+        emit RaffledCore.NFTPrizeAwarded(
             raffleId, ALICE, address(nft), NFT_TOKEN_ID_2,
             paymentPool - paymentFee, paymentFee
         );
-        mgr.claimERC721Prize(raffleId);
-    }
-
-    function test_ClaimERC721Prize_UpdatesClaimStatus() external {
-        uint256 raffleId = _createERC721RaffleWithParams(TICKET_PRICE, 10, DURATION);
-        _enterAs(ALICE, raffleId, 10);
-        
-        _warpPastExpiry();
-        uint256 requestId = _triggerUpkeep();
         _fulfillVRF(requestId, 5);
-        
-        vm.prank(ALICE);
-        mgr.claimERC721Prize(raffleId);
-        
-        (address winner, uint256 claimableAt, RaffleManager7.ERC721ClaimStatus status) = mgr.getERC721Claim(raffleId);
-        assertEq(winner, address(0));
-        assertEq(claimableAt, 0);
-        assertEq(uint256(status), 2); // CLAIMED
-    }
-
-    function test_ClaimERC721Prize_RevertNoPendingPrize() external {
-        uint256 raffleId = _createERC721Raffle();
-        
-        vm.expectRevert(RaffleManager7.NoPendingPrize.selector);
-        vm.prank(ALICE);
-        mgr.claimERC721Prize(raffleId);
-    }
-
-    function test_ClaimERC721Prize_RevertNotWinner() external {
-        uint256 raffleId = _createERC721RaffleWithParams(TICKET_PRICE, 10, DURATION);
-        _enterAs(ALICE, raffleId, 10);
-        
-        _warpPastExpiry();
-        uint256 requestId = _triggerUpkeep();
-        _fulfillVRF(requestId, 5);
-        
-        vm.prank(BOB);
-        vm.expectRevert(RaffleManager7.NotWinner.selector);
-        mgr.claimERC721Prize(raffleId);
-    }
-
-    function test_ClaimERC721Prize_CanOnlyClaimOnce() external {
-        uint256 raffleId = _createERC721RaffleWithParams(TICKET_PRICE, 10, DURATION);
-        _enterAs(ALICE, raffleId, 10);
-        
-        _warpPastExpiry();
-        uint256 requestId = _triggerUpkeep();
-        _fulfillVRF(requestId, 5);
-        
-        vm.prank(ALICE);
-        mgr.claimERC721Prize(raffleId);
-        
-        vm.prank(ALICE);
-        vm.expectRevert(RaffleManager7.NoPendingPrize.selector);
-        mgr.claimERC721Prize(raffleId);
-    }
-
-    // ═════════════════════════════════════════════════════════════════════════
-    //  Host Reclaim Tests
-    // ═════════════════════════════════════════════════════════════════════════
-
-    function test_HostReclaimUnclaimed_Success() external {
-        uint256 raffleId = _createERC721RaffleWithParams(TICKET_PRICE, 10, DURATION);
-        _enterAs(ALICE, raffleId, 10);
-        
-        _warpPastExpiry();
-        uint256 requestId = _triggerUpkeep();
-        _fulfillVRF(requestId, 5);
-        
-        // Warp past claim timeout
-        vm.warp(block.timestamp + mgr.ERC721_CLAIM_TIMEOUT() + 1);
-        
-        uint256 paymentPool = TICKET_PRICE * 10;
-        uint256 expectedFee = (paymentPool * FEE_BPS) / 10_000;
-        uint256 expectedHostAmount = paymentPool - expectedFee;
-        uint256 hostUsdcBefore = IERC20(address(usdc)).balanceOf(HOST);
-        
-        vm.prank(HOST);
-        mgr.hostReclaimUnclaimed(raffleId);
-        
-        // Host should get NFT back
-        assertEq(IERC721(address(nft)).ownerOf(NFT_TOKEN_ID_2), HOST);
-        
-        // Host should get payment pool minus fee
-        assertEq(IERC20(address(usdc)).balanceOf(HOST), hostUsdcBefore + expectedHostAmount);
-        
-        // Treasury should receive fee
-        assertEq(IERC20(address(usdc)).balanceOf(TREASURY), expectedFee);
-    }
-
-    function test_HostReclaimUnclaimed_UpdatesClaimStatus() external {
-        uint256 raffleId = _createERC721RaffleWithParams(TICKET_PRICE, 10, DURATION);
-        _enterAs(ALICE, raffleId, 10);
-        
-        _warpPastExpiry();
-        uint256 requestId = _triggerUpkeep();
-        _fulfillVRF(requestId, 5);
-        
-        vm.warp(block.timestamp + mgr.ERC721_CLAIM_TIMEOUT() + 1);
-        
-        vm.prank(HOST);
-        mgr.hostReclaimUnclaimed(raffleId);
-        
-        (address winner, uint256 claimableAt, RaffleManager7.ERC721ClaimStatus status) = mgr.getERC721Claim(raffleId);
-        assertEq(winner, address(0));
-        assertEq(claimableAt, 0);
-        assertEq(uint256(status), 3); // EXPIRED
-    }
-
-    function test_HostReclaimUnclaimed_EmitsEvent() external {
-        uint256 raffleId = _createERC721RaffleWithParams(TICKET_PRICE, 10, DURATION);
-        _enterAs(ALICE, raffleId, 10);
-        
-        _warpPastExpiry();
-        uint256 requestId = _triggerUpkeep();
-        _fulfillVRF(requestId, 5);
-        
-        vm.warp(block.timestamp + mgr.ERC721_CLAIM_TIMEOUT() + 1);
-        
-        vm.prank(HOST);
-        vm.expectEmit(true, true, false, false);
-        emit RaffleManager7.ERC721ClaimExpired(raffleId, HOST);
-        mgr.hostReclaimUnclaimed(raffleId);
-    }
-
-    function test_HostReclaimUnclaimed_RevertNoPendingPrize() external {
-        uint256 raffleId = _createERC721Raffle();
-        
-        vm.expectRevert(RaffleManager7.NoPendingPrize.selector);
-        vm.prank(HOST);
-        mgr.hostReclaimUnclaimed(raffleId);
-    }
-
-    function test_HostReclaimUnclaimed_RevertNotHost() external {
-        uint256 raffleId = _createERC721RaffleWithParams(TICKET_PRICE, 10, DURATION);
-        _enterAs(ALICE, raffleId, 10);
-        
-        _warpPastExpiry();
-        uint256 requestId = _triggerUpkeep();
-        _fulfillVRF(requestId, 5);
-        
-        vm.warp(block.timestamp + mgr.ERC721_CLAIM_TIMEOUT() + 1);
-        
-        vm.prank(ALICE);
-        vm.expectRevert(RaffleManager7.NotRaffleHost.selector);
-        mgr.hostReclaimUnclaimed(raffleId);
-    }
-
-    function test_HostReclaimUnclaimed_RevertClaimTimeoutNotReached() external {
-        uint256 raffleId = _createERC721RaffleWithParams(TICKET_PRICE, 10, DURATION);
-        _enterAs(ALICE, raffleId, 10);
-        
-        _warpPastExpiry();
-        uint256 requestId = _triggerUpkeep();
-        _fulfillVRF(requestId, 5);
-        
-        vm.prank(HOST);
-        vm.expectRevert(RaffleManager7.ClaimTimeoutNotReached.selector);
-        mgr.hostReclaimUnclaimed(raffleId);
     }
 
     // ═════════════════════════════════════════════════════════════════════════
@@ -1102,7 +914,7 @@ contract RaffleManager7Test is Test {
         
         mgr.emergencyFinalize(raffleId);
         
-        RaffleManager7.RaffleData memory raffle = mgr.getRaffle(raffleId);
+        RaffledCore.RaffleData memory raffle = mgr.getRaffle(raffleId);
         assertEq(uint256(raffle.status), 3); // CANCELLED
         
         // Prize should be returned to host
@@ -1119,7 +931,7 @@ contract RaffleManager7Test is Test {
         vm.warp(block.timestamp + mgr.VRF_TIMEOUT() + 1);
         
         vm.expectEmit(true, false, false, false);
-        emit RaffleManager7.RaffleEmergencyFinalized(raffleId);
+        emit RaffledCore.RaffleEmergencyFinalized(raffleId);
         mgr.emergencyFinalize(raffleId);
     }
 
@@ -1147,7 +959,7 @@ contract RaffleManager7Test is Test {
     function test_EmergencyFinalize_RevertRaffleNotPendingVRF() external {
         uint256 raffleId = _createERC20Raffle();
         
-        vm.expectRevert(abi.encodeWithSelector(RaffleManager7.RaffleNotPendingVRF.selector, raffleId));
+        vm.expectRevert(abi.encodeWithSelector(RaffledCore.RaffleNotPendingVRF.selector, raffleId));
         mgr.emergencyFinalize(raffleId);
     }
 
@@ -1159,7 +971,7 @@ contract RaffleManager7Test is Test {
         _triggerUpkeep();
         
         // Don't warp past VRF timeout yet
-        vm.expectRevert(RaffleManager7.VRFTimeoutNotReached.selector);
+        vm.expectRevert(RaffledCore.VRFTimeoutNotReached.selector);
         mgr.emergencyFinalize(raffleId);
     }
 
@@ -1231,7 +1043,7 @@ contract RaffleManager7Test is Test {
         
         vm.prank(ALICE);
         vm.expectEmit(true, true, false, true);
-        emit RaffleManager7.RefundClaimed(raffleId, ALICE, refundable);
+        emit RaffledCore.RefundClaimed(raffleId, ALICE, refundable);
         mgr.claimRefund(raffleId);
     }
 
@@ -1263,7 +1075,7 @@ contract RaffleManager7Test is Test {
         mgr.claimRefund(raffleId);
         
         vm.prank(ALICE);
-        vm.expectRevert(RaffleManager7.NoRefundAvailable.selector);
+        vm.expectRevert(RaffledCore.NoRefundAvailable.selector);
         mgr.claimRefund(raffleId);
     }
 
@@ -1271,7 +1083,7 @@ contract RaffleManager7Test is Test {
         uint256 raffleId = _createERC20Raffle();
         
         vm.prank(ALICE);
-        vm.expectRevert(abi.encodeWithSelector(RaffleManager7.RaffleNotCancelled.selector, raffleId));
+        vm.expectRevert(abi.encodeWithSelector(RaffledCore.RaffleNotCancelled.selector, raffleId));
         mgr.claimRefund(raffleId);
     }
 
@@ -1286,7 +1098,7 @@ contract RaffleManager7Test is Test {
         
         // BOB has no refund available
         vm.prank(BOB);
-        vm.expectRevert(RaffleManager7.NoRefundAvailable.selector);
+        vm.expectRevert(RaffledCore.NoRefundAvailable.selector);
         mgr.claimRefund(raffleId);
     }
 
@@ -1305,7 +1117,7 @@ contract RaffleManager7Test is Test {
 
     function test_ProposeFeeChange_Success() external {
         vm.expectEmit(false, false, false, true);
-        emit RaffleManager7.FeeChangeProposed(500, block.timestamp + 2 days);
+        emit RaffledCore.FeeChangeProposed(500, block.timestamp + 2 days);
         mgr.proposeFeeChange(500);
         
         assertEq(mgr.pendingFeeBps(), 500);
@@ -1318,7 +1130,7 @@ contract RaffleManager7Test is Test {
         vm.warp(block.timestamp + 2 days + 1);
         
         vm.expectEmit(false, false, false, true);
-        emit RaffleManager7.FeeChangeApplied(250, 500);
+        emit RaffledCore.FeeChangeApplied(250, 500);
         mgr.applyFeeChange();
         
         assertEq(mgr.platformFeeBps(), 500);
@@ -1330,20 +1142,20 @@ contract RaffleManager7Test is Test {
         mgr.proposeFeeChange(500);
         
         vm.expectRevert(abi.encodeWithSelector(
-            RaffleManager7.FeeTimelockNotElapsed.selector,
+            RaffledCore.FeeTimelockNotElapsed.selector,
             block.timestamp + 2 days
         ));
         mgr.applyFeeChange();
     }
 
     function test_ApplyFeeChange_RevertNoFeeChangePending() external {
-        vm.expectRevert(RaffleManager7.NoFeeChangePending.selector);
+        vm.expectRevert(RaffledCore.NoFeeChangePending.selector);
         mgr.applyFeeChange();
     }
 
     function test_ProposeFeeChange_RevertFeeTooHigh() external {
         vm.expectRevert(abi.encodeWithSelector(
-            RaffleManager7.FeeTooHigh.selector,
+            RaffledCore.FeeTooHigh.selector,
             1500,
             1000
         ));
@@ -1368,7 +1180,7 @@ contract RaffleManager7Test is Test {
 
     function test_SetMinDuration_RevertBelowFloor() external {
         vm.expectRevert(abi.encodeWithSelector(
-            RaffleManager7.DurationTooShort.selector,
+            RaffledCore.DurationTooShort.selector,
             1 hours,
             2 hours
         ));
@@ -1411,7 +1223,7 @@ contract RaffleManager7Test is Test {
         // Random word 0 should select ticket 1 (ALICE)
         _fulfillVRF(requestId, 0);
         
-        RaffleManager7.RaffleData memory raffle = mgr.getRaffle(raffleId);
+        RaffledCore.RaffleData memory raffle = mgr.getRaffle(raffleId);
         assertEq(uint256(raffle.status), 2); // COMPLETED
     }
 
@@ -1427,7 +1239,7 @@ contract RaffleManager7Test is Test {
         // Random word 9 should select ticket 10 (CHARLIE)
         _fulfillVRF(requestId, 9);
         
-        RaffleManager7.RaffleData memory raffle = mgr.getRaffle(raffleId);
+        RaffledCore.RaffleData memory raffle = mgr.getRaffle(raffleId);
         assertEq(uint256(raffle.status), 2); // COMPLETED
     }
 
@@ -1443,7 +1255,7 @@ contract RaffleManager7Test is Test {
         // Random word 4 should select ticket 5 (BOB)
         _fulfillVRF(requestId, 4);
         
-        RaffleManager7.RaffleData memory raffle = mgr.getRaffle(raffleId);
+        RaffledCore.RaffleData memory raffle = mgr.getRaffle(raffleId);
         assertEq(uint256(raffle.status), 2); // COMPLETED
     }
 
@@ -1463,7 +1275,7 @@ contract RaffleManager7Test is Test {
         // Should still work efficiently with O(log N) search
         _fulfillVRF(requestId, 500);
         
-        RaffleManager7.RaffleData memory raffle = mgr.getRaffle(raffleId);
+        RaffledCore.RaffleData memory raffle = mgr.getRaffle(raffleId);
         assertEq(uint256(raffle.status), 2); // COMPLETED
     }
 
@@ -1516,7 +1328,7 @@ contract RaffleManager7Test is Test {
         IERC20(address(usdc)).approve(address(mgr), cost);
         
         vm.prank(BOB);
-        vm.expectRevert(abi.encodeWithSelector(RaffleManager7.MaxCapReached.selector, raffleId));
+        vm.expectRevert(abi.encodeWithSelector(RaffledCore.MaxCapReached.selector, raffleId));
         mgr.enterRaffle(raffleId, 1);
     }
 
@@ -1525,7 +1337,7 @@ contract RaffleManager7Test is Test {
         
         _enterAs(ALICE, raffleId, 10);
         
-        RaffleManager7.RaffleData memory raffle = mgr.getRaffle(raffleId);
+        RaffledCore.RaffleData memory raffle = mgr.getRaffle(raffleId);
         assertEq(raffle.ticketsSold, 10);
         assertEq(raffle.ticketsSold, raffle.maxCap);
     }
@@ -1549,8 +1361,8 @@ contract RaffleManager7Test is Test {
         assertEq(erc20RaffleId, 1);
         assertEq(erc721RaffleId, 2);
         
-        RaffleManager7.RaffleData memory raffle1 = mgr.getRaffle(erc20RaffleId);
-        RaffleManager7.RaffleData memory raffle2 = mgr.getRaffle(erc721RaffleId);
+        RaffledCore.RaffleData memory raffle1 = mgr.getRaffle(erc20RaffleId);
+        RaffledCore.RaffleData memory raffle2 = mgr.getRaffle(erc721RaffleId);
         
         assertEq(uint256(raffle1.prizeType), 0); // ERC20
         assertEq(uint256(raffle2.prizeType), 1); // ERC721
@@ -1585,7 +1397,7 @@ contract RaffleManager7Test is Test {
         IERC20(address(usdc)).approve(address(mgr), cost);
         
         vm.prank(BOB);
-        vm.expectRevert(abi.encodeWithSelector(RaffleManager7.RaffleNotOpen.selector, raffleId));
+        vm.expectRevert(abi.encodeWithSelector(RaffledCore.RaffleNotOpen.selector, raffleId));
         mgr.enterRaffle(raffleId, 1);
     }
 
@@ -1596,7 +1408,7 @@ contract RaffleManager7Test is Test {
     function test_GetRaffle_ReturnsCorrectData() external {
         uint256 raffleId = _createERC20Raffle();
         
-        RaffleManager7.RaffleData memory raffle = mgr.getRaffle(raffleId);
+        RaffledCore.RaffleData memory raffle = mgr.getRaffle(raffleId);
         
         assertEq(raffle.host, HOST);
         assertEq(raffle.prizeAsset, address(prizeToken));
@@ -1630,21 +1442,6 @@ contract RaffleManager7Test is Test {
         assertEq(endTicket2, 8);
     }
 
-    function test_GetERC721Claim_ReturnsCorrectData() external {
-        uint256 raffleId = _createERC721RaffleWithParams(TICKET_PRICE, 10, DURATION);
-        _enterAs(ALICE, raffleId, 10);
-        
-        _warpPastExpiry();
-        uint256 requestId = _triggerUpkeep();
-        _fulfillVRF(requestId, 5);
-        
-        (address winner, uint256 claimableAt, RaffleManager7.ERC721ClaimStatus status) = mgr.getERC721Claim(raffleId);
-        
-        assertEq(winner, ALICE);
-        assertGt(claimableAt, 0);
-        assertEq(uint256(status), 1); // CLAIMABLE
-    }
-
     // ═════════════════════════════════════════════════════════════════════════
     //  Constants and Immutables Tests
     // ═════════════════════════════════════════════════════════════════════════
@@ -1654,7 +1451,6 @@ contract RaffleManager7Test is Test {
         assertEq(mgr.MIN_DURATION_FLOOR(), 2 hours);
         assertEq(mgr.FEE_TIMELOCK(), 2 days);
         assertEq(mgr.VRF_TIMEOUT(), 24 hours);
-        assertEq(mgr.ERC721_CLAIM_TIMEOUT(), 30 days);
         assertEq(mgr.CHECK_UPKEEP_BATCH(), 50);
     }
 
@@ -1754,7 +1550,7 @@ contract RaffleManager7Test is Test {
         _createERC20Raffle();
         // Should silently return for raffleId > raffleCount
         mgr.performUpkeep(abi.encode(999));
-        RaffleManager7.RaffleData memory raffle = mgr.getRaffle(1);
+        RaffledCore.RaffleData memory raffle = mgr.getRaffle(1);
         assertEq(uint256(raffle.status), 0); // Still OPEN
     }
 
@@ -1817,7 +1613,7 @@ contract RaffleManager7Test is Test {
         uint256 raffleId = _createERC20Raffle();
         
         vm.prank(ALICE);
-        vm.expectRevert(RaffleManager7.InvalidParams.selector);
+        vm.expectRevert(RaffledCore.InvalidParams.selector);
         mgr.enterRaffle(raffleId, uint256(type(uint96).max) + 1);
     }
 
@@ -1844,7 +1640,7 @@ contract RaffleManager7Test is Test {
         IERC20(address(usdc)).approve(address(mgr), cost);
         
         vm.prank(ALICE);
-        vm.expectRevert(abi.encodeWithSelector(RaffleManager7.RaffleNotOpen.selector, raffleId));
+        vm.expectRevert(abi.encodeWithSelector(RaffledCore.RaffleNotOpen.selector, raffleId));
         mgr.enterRaffle(raffleId, 1);
     }
 
@@ -1855,14 +1651,14 @@ contract RaffleManager7Test is Test {
         _warpPastExpiry();
         _triggerUpkeep(); // Zero participants -> COMPLETED
         
-        vm.expectRevert(abi.encodeWithSelector(RaffleManager7.RaffleNotPendingVRF.selector, raffleId));
+        vm.expectRevert(abi.encodeWithSelector(RaffledCore.RaffleNotPendingVRF.selector, raffleId));
         mgr.emergencyFinalize(raffleId);
     }
 
     function test_EmergencyFinalize_RevertOnOpenRaffle() external {
         uint256 raffleId = _createERC20Raffle();
         
-        vm.expectRevert(abi.encodeWithSelector(RaffleManager7.RaffleNotPendingVRF.selector, raffleId));
+        vm.expectRevert(abi.encodeWithSelector(RaffledCore.RaffleNotPendingVRF.selector, raffleId));
         mgr.emergencyFinalize(raffleId);
     }
 
@@ -1881,44 +1677,6 @@ contract RaffleManager7Test is Test {
         
         // NFT was already returned during performUpkeep (underfilled), should not return again
         assertEq(nftBalanceAfter, nftBalanceBefore);
-    }
-
-    // ── ERC721 claim edge cases ──
-
-    function test_ClaimERC721Prize_RevertOnERC20Raffle() external {
-        uint256 raffleId = _createERC20Raffle();
-        
-        vm.prank(ALICE);
-        vm.expectRevert(RaffleManager7.NoPendingPrize.selector);
-        mgr.claimERC721Prize(raffleId);
-    }
-
-    function test_HostReclaimUnclaimed_RevertOnERC20Raffle() external {
-        uint256 raffleId = _createERC20Raffle();
-        
-        vm.prank(HOST);
-        vm.expectRevert(RaffleManager7.NoPendingPrize.selector);
-        mgr.hostReclaimUnclaimed(raffleId);
-    }
-
-    function test_HostReclaimUnclaimed_ZeroPaymentPool() external {
-        uint256 raffleId = _createERC721RaffleWithParams(TICKET_PRICE, 10, DURATION);
-        _enterAs(ALICE, raffleId, 10);
-        
-        _warpPastExpiry();
-        uint256 requestId = _triggerUpkeep();
-        _fulfillVRF(requestId, 5);
-        
-        // Free entry doesn't add to payment pool, but paid entry does
-        // This test verifies the zero payment pool path in hostReclaimUnclaimed
-        // is handled (paymentPool > 0 check)
-        vm.warp(block.timestamp + mgr.ERC721_CLAIM_TIMEOUT() + 1);
-        
-        vm.prank(HOST);
-        mgr.hostReclaimUnclaimed(raffleId);
-        
-        // NFT should be returned to host
-        assertEq(IERC721(address(nft)).ownerOf(NFT_TOKEN_ID_2), HOST);
     }
 
     // ── claimRefund edge cases ──
@@ -1945,7 +1703,7 @@ contract RaffleManager7Test is Test {
 
     function test_ClaimRefund_RevertOnNonExistentRaffle() external {
         vm.prank(ALICE);
-        vm.expectRevert(abi.encodeWithSelector(RaffleManager7.RaffleNotCancelled.selector, 999));
+        vm.expectRevert(abi.encodeWithSelector(RaffledCore.RaffleNotCancelled.selector, 999));
         mgr.claimRefund(999);
     }
 
@@ -2040,7 +1798,7 @@ contract RaffleManager7Test is Test {
         vm.prank(HOST);
         uint256 raffleId = mgr.createRaffleERC721(address(nft), NFT_TOKEN_ID, TICKET_PRICE, MAX_CAP, DURATION);
         
-        RaffleManager7.RaffleData memory raffle = mgr.getRaffle(raffleId);
+        RaffledCore.RaffleData memory raffle = mgr.getRaffle(raffleId);
         assertEq(raffle.host, HOST);
     }
 
@@ -2082,33 +1840,8 @@ contract RaffleManager7Test is Test {
         IERC20(address(prizeToken)).approve(address(mgr), PRIZE_AMT);
         
         vm.prank(HOST);
-        vm.expectRevert(RaffleManager7.InvalidParams.selector);
+        vm.expectRevert(RaffledCore.InvalidParams.selector);
         mgr.createRaffleERC20(address(prizeToken), PRIZE_AMT, TICKET_PRICE, MAX_CAP, 3 hours);
-    }
-
-    // ── hostReclaimUnclaimed payment pool distribution ──
-
-    function test_HostReclaimUnclaimed_DistributesPaymentPoolWithFee() external {
-        uint256 raffleId = _createERC721RaffleWithParams(TICKET_PRICE, 10, DURATION);
-        _enterAs(ALICE, raffleId, 10);
-        
-        uint256 paymentPool = TICKET_PRICE * 10;
-        uint256 expectedFee = (paymentPool * FEE_BPS) / 10_000;
-        uint256 expectedHostAmount = paymentPool - expectedFee;
-        uint256 hostUsdcBefore = IERC20(address(usdc)).balanceOf(HOST);
-        uint256 treasuryUsdcBefore = IERC20(address(usdc)).balanceOf(TREASURY);
-        
-        _warpPastExpiry();
-        uint256 requestId = _triggerUpkeep();
-        _fulfillVRF(requestId, 5);
-        
-        vm.warp(block.timestamp + mgr.ERC721_CLAIM_TIMEOUT() + 1);
-        
-        vm.prank(HOST);
-        mgr.hostReclaimUnclaimed(raffleId);
-        
-        assertEq(IERC20(address(usdc)).balanceOf(HOST), hostUsdcBefore + expectedHostAmount);
-        assertEq(IERC20(address(usdc)).balanceOf(TREASURY), treasuryUsdcBefore + expectedFee);
     }
 
     // ── VRF fulfillment with zero participants (race condition) ──
@@ -2124,7 +1857,7 @@ contract RaffleManager7Test is Test {
         // and requested VRF. The VRF callback should handle this gracefully.
         _fulfillVRF(requestId, 0);
         
-        RaffleManager7.RaffleData memory raffle = mgr.getRaffle(raffleId);
+        RaffledCore.RaffleData memory raffle = mgr.getRaffle(raffleId);
         assertEq(uint256(raffle.status), 2); // COMPLETED
     }
 
@@ -2184,46 +1917,4 @@ contract RaffleManager7Test is Test {
         assertEq(owner2, ALICE);
     }
 
-    // ── ERC721 full-fill payment distribution on claim ──
-
-    function test_ClaimERC721Prize_DistributesPaymentPoolWithFee() external {
-        uint256 raffleId = _createERC721RaffleWithParams(TICKET_PRICE, 10, DURATION);
-        _enterAs(ALICE, raffleId, 10);
-        
-        uint256 paymentPool = TICKET_PRICE * 10;
-        uint256 expectedFee = (paymentPool * FEE_BPS) / 10_000;
-        uint256 expectedHostAmount = paymentPool - expectedFee;
-        uint256 hostUsdcBefore = IERC20(address(usdc)).balanceOf(HOST);
-        uint256 treasuryUsdcBefore = IERC20(address(usdc)).balanceOf(TREASURY);
-        
-        _warpPastExpiry();
-        uint256 requestId = _triggerUpkeep();
-        _fulfillVRF(requestId, 5);
-        
-        vm.prank(ALICE);
-        mgr.claimERC721Prize(raffleId);
-        
-        assertEq(IERC20(address(usdc)).balanceOf(HOST), hostUsdcBefore + expectedHostAmount);
-        assertEq(IERC20(address(usdc)).balanceOf(TREASURY), treasuryUsdcBefore + expectedFee);
-        assertEq(IERC721(address(nft)).ownerOf(NFT_TOKEN_ID_2), ALICE);
-    }
-
-    // ── ERC721 full-fill emits all expected events ──
-
-    function test_ClaimERC721Prize_EmitsPlatformFeeCollected() external {
-        uint256 raffleId = _createERC721RaffleWithParams(TICKET_PRICE, 10, DURATION);
-        _enterAs(ALICE, raffleId, 10);
-        
-        _warpPastExpiry();
-        uint256 requestId = _triggerUpkeep();
-        _fulfillVRF(requestId, 5);
-        
-        uint256 paymentPool = TICKET_PRICE * 10;
-        uint256 expectedFee = (paymentPool * FEE_BPS) / 10_000;
-        
-        vm.prank(ALICE);
-        vm.expectEmit(true, false, false, true);
-        emit RaffleManager7.PlatformFeeCollected(raffleId, expectedFee);
-        mgr.claimERC721Prize(raffleId);
-    }
 }

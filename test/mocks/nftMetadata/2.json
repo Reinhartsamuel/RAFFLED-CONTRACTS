@@ -1,0 +1,11 @@
+{
+  "name": "British Mug",
+  "description": "Raffle Prize NFT 2",
+  "image": "https://pub-fedd92d489cc481596abe63636ea383f.r2.dev/images/2.jpeg",
+  "attributes": [
+    {
+      "trait_type": "Rarity",
+      "value": "Legendary"
+    }
+  ]
+}
