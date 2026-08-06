@@ -1202,19 +1202,7 @@ export const RaffledCoreAbi = [
         "indexed": false,
         "internalType": "uint256"
       },
-      {
-        "name": "ticketPrice",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      },
-      {
-        "name": "maxCap",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      }
-    ],
+      ],
     "anonymous": false
   },
   {

@@ -12,3 +12,11 @@ docs/
 
 # Dotenv file
 .env
+
+Raffled-pivot-plan.md
+PIVOT_PLAN.md
+raffled-pivot.json
+.kilo/*
+.claude/*
+hermes-upload.sh
+hermes-download.sh

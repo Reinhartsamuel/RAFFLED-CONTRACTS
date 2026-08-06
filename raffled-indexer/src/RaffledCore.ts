@@ -1,6 +1,7 @@
 import { ponder } from "ponder:registry";
 
 import { raffle, participant, event as raffleEvent } from "../ponder.schema";
+import { RaffledCoreAbi } from "../abis/RaffledCoreAbi";
 
 async function upsertRaffle(
   context: any,
@@ -30,6 +31,28 @@ function eventId(event: {
   log: { logIndex: number };
 }) {
   return `${event.transaction.hash}-${event.log.logIndex}`;
+}
+
+// The deployed RaffledCore emits the pre-A0 RaffleCreated event (8 params —
+// no ticketPrice/maxCap). Supplement them with one on-chain read.
+const RAFFLED_CORE_ADDRESS = process.env.RAFFLED_CORE_ADDRESS ?? "0xc17eee20B4990021bE9cc8eCB7833706465bb8b9";
+
+async function readTicketPriceAndMaxCap(context: any, raffleId: bigint) {
+  try {
+    const data: any = await context.client.readContract({
+      address: RAFFLED_CORE_ADDRESS as `0x${string}`,
+      abi: RaffledCoreAbi,
+      functionName: "getRaffle",
+      args: [raffleId],
+    });
+    return {
+      ticketPrice: data.ticketPrice ?? data[8] ?? 0n,
+      maxCap: data.maxCap ?? data[9] ?? 0n,
+    };
+  } catch (err) {
+    console.warn(`[indexer] getRaffle(${raffleId}) read failed:`, err);
+    return { ticketPrice: 0n, maxCap: 0n };
+  }
 }
 
 async function insertEvent(
@@ -64,9 +87,9 @@ ponder.on("RaffledCore:RaffleCreated", async ({ event, context }) => {
     expiry,
     prizeSymbol,
     decimals,
-    ticketPrice,
-    maxCap,
   } = event.args;
+
+  const { ticketPrice, maxCap } = await readTicketPriceAndMaxCap(context, raffleId);
 
   await context.db.insert(raffle).values({
     id: raffleId,

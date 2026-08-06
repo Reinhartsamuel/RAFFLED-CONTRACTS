@@ -16,7 +16,7 @@ export default createConfig({
       address:
         process.env.RAFFLED_CORE_ADDRESS ??
         "0xc17eee20B4990021bE9cc8eCB7833706465bb8b9",
-      startBlock: 0,
+      startBlock: 42699846,
     },
   },
 });
