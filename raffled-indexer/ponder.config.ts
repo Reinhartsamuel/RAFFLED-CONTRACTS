@@ -2,15 +2,27 @@ import { createConfig } from "ponder";
 
 import { RaffledCoreAbi } from "./abis/RaffledCoreAbi";
 
-const DATABASE_URL = process.env.DATABASE_URL;
+const RAW_DATABASE_URL = process.env.DATABASE_URL;
 
-if (!DATABASE_URL || !DATABASE_URL.startsWith("postgres")) {
+if (!RAW_DATABASE_URL || !RAW_DATABASE_URL.startsWith("postgres")) {
   throw new Error(
     "FATAL: DATABASE_URL is not set or is not a Postgres connection string. " +
       "This indexer requires an external Postgres database (e.g. Aiven) and REFUSES to start with the embedded PGlite database. " +
       "Set DATABASE_URL in .env (e.g. postgres://user:pass@host:port/dbname?sslmode=require) and restart.",
   );
 }
+
+// pg-connection-string >= 2.x treats sslmode=require/prefer/verify-ca as
+// aliases for verify-full, i.e. it validates the server certificate against
+// the system trust store. Aiven uses a private CA, so that fails with
+// "Connection terminated unexpectedly". Opting into libpq compatibility
+// keeps the connection encrypted but skips CA verification, which is the
+// correct behavior for Aiven-style private-CA endpoints.
+const DATABASE_URL =
+  /[?&]sslmode=(require|prefer|verify-ca)(&|$)/.test(RAW_DATABASE_URL) &&
+  !/[?&]uselibpqcompat/.test(RAW_DATABASE_URL)
+    ? `${RAW_DATABASE_URL}${RAW_DATABASE_URL.includes("?") ? "&" : "?"}uselibpqcompat=true`
+    : RAW_DATABASE_URL;
 
 export default createConfig({
   database: {
