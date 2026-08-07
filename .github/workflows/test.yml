@@ -2,11 +2,19 @@ name: CI
 
 on:
   push:
+    paths:
+      - "src/**"
+      - "test/**"
+      - "script/**"
+      - "foundry.toml"
+      - ".github/workflows/test.yml"
   pull_request:
+    paths:
+      - "src/**"
+      - "test/**"
+      - "script/**"
+      - "foundry.toml"
   workflow_dispatch:
-
-env:
-  FOUNDRY_PROFILE: ci
 
 jobs:
   check:
