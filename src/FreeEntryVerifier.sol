@@ -29,9 +29,7 @@ contract FreeEntryVerifier is EIP712("RaffleManager4", "1") {
     event TrustedSignerUpdated(address oldSigner, address newSigner);
 
     // ── Type hash (matches backend) ──────────────────────────────────────
-    bytes32 private constant FREE_ENTRY_TYPEHASH = keccak256(
-        "FreeEntry(uint256 raffleId,address user)"
-    );
+    bytes32 private constant FREE_ENTRY_TYPEHASH = keccak256("FreeEntry(uint256 raffleId,address user)");
 
     // ── Modifiers ────────────────────────────────────────────────────────
     modifier onlyVerifierOwner() {
@@ -60,16 +58,13 @@ contract FreeEntryVerifier is EIP712("RaffleManager4", "1") {
     /// @param raffleId  Target raffle.
     /// @param user      User address claiming free entry.
     /// @param signature EIP-712 signature from trustedSigner.
-    function verifyAndClaim(uint256 raffleId, address user, bytes calldata signature)
-        public
-        returns (bool success)
-    {
+    function verifyAndClaim(uint256 raffleId, address user, bytes calldata signature) public returns (bool success) {
         // 1. Prevent double-claim
         if (freeEntryClaimed[raffleId][user]) revert AlreadyClaimed();
 
         // 2. Build digest exactly as EIP-712 specifies
         bytes32 structHash = keccak256(abi.encode(FREE_ENTRY_TYPEHASH, raffleId, user));
-        bytes32 digest     = _hashTypedDataV4(structHash);
+        bytes32 digest = _hashTypedDataV4(structHash);
 
         // 3. Recover signer and verify
         address recovered = digest.recover(signature);
@@ -88,18 +83,22 @@ contract FreeEntryVerifier is EIP712("RaffleManager4", "1") {
         bytes32 structHash = keccak256(abi.encode(FREE_ENTRY_TYPEHASH, raffleId, user));
         return _hashTypedDataV4(structHash);
     }
-    
+
     function recoverSigner(uint256 raffleId, address user, bytes calldata signature) external view returns (address) {
         bytes32 structHash = keccak256(abi.encode(FREE_ENTRY_TYPEHASH, raffleId, user));
-        bytes32 digest     = _hashTypedDataV4(structHash);
+        bytes32 digest = _hashTypedDataV4(structHash);
         return digest.recover(signature);
     }
 
-    function isSignatureEligible(uint256 raffleId, address user, bytes calldata signature) external view returns (bool) {
+    function isSignatureEligible(uint256 raffleId, address user, bytes calldata signature)
+        external
+        view
+        returns (bool)
+    {
         if (freeEntryClaimed[raffleId][user]) return false;
 
         bytes32 structHash = keccak256(abi.encode(FREE_ENTRY_TYPEHASH, raffleId, user));
-        bytes32 digest     = _hashTypedDataV4(structHash);
+        bytes32 digest = _hashTypedDataV4(structHash);
         address recovered = digest.recover(signature);
         return recovered == trustedSigner;
     }

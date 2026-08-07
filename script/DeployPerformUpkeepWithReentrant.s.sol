@@ -5,10 +5,7 @@ import {Script, console} from "forge-std/Script.sol";
 import {PerformUpkeepWithReentrant} from "../test/mocks/PerformUpkeepWithReentrant.sol";
 
 contract DeployPerformUpkeepWithReentrant is Script {
-    function run()
-        external
-        returns (PerformUpkeepWithReentrant performUpkeepWithReentrant)
-    {
+    function run() external returns (PerformUpkeepWithReentrant performUpkeepWithReentrant) {
         // Load configuration from environment variables
         uint256 deployerKey;
         address deployer;
@@ -28,10 +25,7 @@ contract DeployPerformUpkeepWithReentrant is Script {
             "SUB_ID"
             // uint256(1)
         );
-        address trustedSigner = vm.envOr(
-            "TRUSTED_SIGNER",
-            deployerKey != 0 ? vm.addr(deployerKey) : address(0)
-        );
+        address trustedSigner = vm.envOr("TRUSTED_SIGNER", deployerKey != 0 ? vm.addr(deployerKey) : address(0));
 
         // ── Validate critical params ────────────────────────────────────────
         require(vrfCoordinator != address(0), "VRF_COORDINATOR required");
@@ -40,16 +34,8 @@ contract DeployPerformUpkeepWithReentrant is Script {
 
         // Deploy PerformUpkeepWithReentrant
         vm.startBroadcast(deployerKey);
-        performUpkeepWithReentrant = new PerformUpkeepWithReentrant(
-            vrfCoordinator,
-            keyHash,
-            subId,
-            trustedSigner
-        );
-        console.log(
-            "Deployed PerformUpkeepWithReentrant at: %s",
-            address(performUpkeepWithReentrant)
-        );
+        performUpkeepWithReentrant = new PerformUpkeepWithReentrant(vrfCoordinator, keyHash, subId, trustedSigner);
+        console.log("Deployed PerformUpkeepWithReentrant at: %s", address(performUpkeepWithReentrant));
         vm.stopBroadcast();
 
         return performUpkeepWithReentrant;

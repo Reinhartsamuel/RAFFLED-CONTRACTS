@@ -38,14 +38,9 @@ contract CreateAndEnterFreeRaffle is Script {
         address deployer = vm.addr(deployerKey);
         address freeEntryUser = vm.addr(participantKey);
 
-        address vrfCoordinator = vm.envOr(
-            "VRF_COORDINATOR",
-            address(0x5C210eF41CD1a72de73bF76eC39637bB0d3d7BEE)
-        );
-        bytes32 keyHash = vm.envOr(
-            "KEY_HASH",
-            bytes32(0x9e1344a1247c8a1785d0a4681a27152bffdb43666ae5bf7d14d24a5efd44bf71)
-        );
+        address vrfCoordinator = vm.envOr("VRF_COORDINATOR", address(0x5C210eF41CD1a72de73bF76eC39637bB0d3d7BEE));
+        bytes32 keyHash =
+            vm.envOr("KEY_HASH", bytes32(0x9e1344a1247c8a1785d0a4681a27152bffdb43666ae5bf7d14d24a5efd44bf71));
         uint256 subId = vm.envOr("SUB_ID", uint256(1));
 
         console.log("=== Deploy RaffleManager4 + Free Entry ===");
@@ -59,14 +54,8 @@ contract CreateAndEnterFreeRaffle is Script {
         address raffleManager;
         {
             vm.startBroadcast(deployerKey);
-            RaffleManager4 mgr = new RaffleManager4(
-                vrfCoordinator,
-                keyHash,
-                subId,
-                mockUsdc,
-                deployer,
-                TRUSTED_SIGNER_ADDR
-            );
+            RaffleManager4 mgr =
+                new RaffleManager4(vrfCoordinator, keyHash, subId, mockUsdc, deployer, TRUSTED_SIGNER_ADDR);
             raffleManager = address(mgr);
             vm.stopBroadcast();
         }
@@ -79,13 +68,8 @@ contract CreateAndEnterFreeRaffle is Script {
         vm.startBroadcast(deployerKey);
         IMockUSDC(mockUsdc).mint(deployer, PRIZE_AMOUNT);
         IERC20(mockUsdc).approve(raffleManager, PRIZE_AMOUNT);
-        raffleId = RaffleManager4(raffleManager).createRaffleERC20(
-            mockUsdc,
-            PRIZE_AMOUNT,
-            TICKET_PRICE,
-            MAX_CAP,
-            DURATION
-        );
+        raffleId =
+            RaffleManager4(raffleManager).createRaffleERC20(mockUsdc, PRIZE_AMOUNT, TICKET_PRICE, MAX_CAP, DURATION);
         vm.stopBroadcast();
         console.log("Raffle created with ID:", raffleId);
 
@@ -112,17 +96,15 @@ contract CreateAndEnterFreeRaffle is Script {
         console.log("Free Entry Tx: user=", freeEntryUser, "raffleId=", raffleId);
     }
 
-    function _signFreeEntry(
-        uint256 signerKey,
-        address verifyingContract,
-        uint256 raffleId,
-        address user
-    ) internal view returns (bytes memory) {
+    function _signFreeEntry(uint256 signerKey, address verifyingContract, uint256 raffleId, address user)
+        internal
+        view
+        returns (bytes memory)
+    {
         uint256 chainId = block.chainid;
 
-        bytes32 DOMAIN_TYPEHASH = keccak256(
-            "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"
-        );
+        bytes32 DOMAIN_TYPEHASH =
+            keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)");
         bytes32 domainSeparator = keccak256(
             abi.encode(
                 DOMAIN_TYPEHASH,

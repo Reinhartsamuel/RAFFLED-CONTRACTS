@@ -35,17 +35,15 @@ contract EnterFreeRaffle is Script {
         console.log("Free entry successful!");
     }
 
-    function _signFreeEntry(
-        uint256 signerKey,
-        address verifyingContract,
-        uint256 raffleId,
-        address user
-    ) internal view returns (bytes memory) {
+    function _signFreeEntry(uint256 signerKey, address verifyingContract, uint256 raffleId, address user)
+        internal
+        view
+        returns (bytes memory)
+    {
         uint256 chainId = block.chainid;
 
-        bytes32 DOMAIN_TYPEHASH = keccak256(
-            "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"
-        );
+        bytes32 DOMAIN_TYPEHASH =
+            keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)");
         bytes32 domainSeparator = keccak256(
             abi.encode(
                 DOMAIN_TYPEHASH,

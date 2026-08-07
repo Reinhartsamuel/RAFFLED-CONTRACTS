@@ -58,10 +58,7 @@ contract Deploy7 is Script {
             address(0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913) // native Circle USDC on Base mainnet
         );
         address treasury = vm.envAddress("TREASURY");
-        address trustedSigner = vm.envOr(
-            "TRUSTED_SIGNER",
-            deployerKey != 0 ? vm.addr(deployerKey) : address(0)
-        );
+        address trustedSigner = vm.envOr("TRUSTED_SIGNER", deployerKey != 0 ? vm.addr(deployerKey) : address(0));
 
         uint256 initialFeeBps = vm.envOr("INITIAL_FEE_BPS", uint256(500));
 
@@ -76,14 +73,7 @@ contract Deploy7 is Script {
             vm.startBroadcast(deployerKey);
         }
 
-        raffle = new RaffledCore(
-            vrfCoordinator,
-            keyHash,
-            subId,
-            paymentToken,
-            treasury,
-            trustedSigner
-        );
+        raffle = new RaffledCore(vrfCoordinator, keyHash, subId, paymentToken, treasury, trustedSigner);
 
         if (initialFeeBps > 0) {
             raffle.proposeFeeChange(initialFeeBps);

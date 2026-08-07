@@ -3,7 +3,9 @@ pragma solidity ^0.8.24;
 
 import {VRFConsumerBaseV2Plus} from "@chainlink/contracts/src/v0.8/vrf/dev/VRFConsumerBaseV2Plus.sol";
 import {VRFV2PlusClient} from "@chainlink/contracts/src/v0.8/vrf/dev/libraries/VRFV2PlusClient.sol";
-import {AutomationCompatibleInterface} from "@chainlink/contracts/src/v0.8/automation/interfaces/AutomationCompatibleInterface.sol";
+import {
+    AutomationCompatibleInterface
+} from "@chainlink/contracts/src/v0.8/automation/interfaces/AutomationCompatibleInterface.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {FreeEntryVerifier} from "../../src/FreeEntryVerifier.sol";
 
@@ -26,17 +28,9 @@ contract PerformUpkeepWithReentrant is
 
     event VRFRequested(uint256 indexed raffleId, uint256 requestId);
     event PerformUpkeepCalled(uint256 indexed raffleId);
-    event WinnerPickedByRandomWords(
-        uint256 indexed raffleId,
-        uint256[] randomWords
-    );
+    event WinnerPickedByRandomWords(uint256 indexed raffleId, uint256[] randomWords);
 
-    constructor(
-        address _vrfCoordinator,
-        bytes32 _keyHash,
-        uint256 _subId,
-        address _trustedSigner
-    )
+    constructor(address _vrfCoordinator, bytes32 _keyHash, uint256 _subId, address _trustedSigner)
         VRFConsumerBaseV2Plus(_vrfCoordinator)
         FreeEntryVerifier(_trustedSigner, msg.sender)
     {
@@ -45,17 +39,13 @@ contract PerformUpkeepWithReentrant is
     }
 
     /// @inheritdoc AutomationCompatibleInterface
-    function checkUpkeep(
-        bytes calldata
-    ) external view override returns (bool, bytes memory) {
+    function checkUpkeep(bytes calldata) external view override returns (bool, bytes memory) {
         return (true, abi.encode(uint256(1)));
     }
 
     /// @inheritdoc AutomationCompatibleInterface
     /// @notice PerformUpkeep is called by Chainlink Automation to close expired raffles.
-    function performUpkeep(
-        bytes calldata performData
-    ) external override nonReentrant {
+    function performUpkeep(bytes calldata performData) external override nonReentrant {
         uint256 raffleId = abi.decode(performData, (uint256));
         // Request VRF for both full-fill and underfill paths
         uint256 requestId = s_vrfCoordinator.requestRandomWords(
@@ -65,9 +55,7 @@ contract PerformUpkeepWithReentrant is
                 requestConfirmations: REQUEST_CONFIRMATIONS,
                 callbackGasLimit: CALLBACK_GAS_LIMIT,
                 numWords: NUM_WORDS,
-                extraArgs: VRFV2PlusClient._argsToBytes(
-                    VRFV2PlusClient.ExtraArgsV1({nativePayment: false})
-                )
+                extraArgs: VRFV2PlusClient._argsToBytes(VRFV2PlusClient.ExtraArgsV1({nativePayment: false}))
             })
         );
 
@@ -80,10 +68,7 @@ contract PerformUpkeepWithReentrant is
     // ──────────────────────────────────────────────────────────────────────
 
     /// @inheritdoc VRFConsumerBaseV2Plus
-    function fulfillRandomWords(
-        uint256 _requestId,
-        uint256[] calldata _randomWords
-    ) internal override nonReentrant {
+    function fulfillRandomWords(uint256 _requestId, uint256[] calldata _randomWords) internal override nonReentrant {
         uint256 raffleId = requestIdToRaffleId[_requestId];
         delete requestIdToRaffleId[_requestId];
         emit WinnerPickedByRandomWords(raffleId, _randomWords);

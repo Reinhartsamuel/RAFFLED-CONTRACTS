@@ -2,8 +2,8 @@
 pragma solidity ^0.8.24;
 
 import {Script, console} from "forge-std/Script.sol";
-import {RaffleManager3}  from "../src/RaffleManager3.sol";
-import {IERC20}          from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {RaffleManager3} from "../src/RaffleManager3.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 /// @notice Phase A – create all test raffles and purchase tickets.
 ///
@@ -54,12 +54,11 @@ interface IMockNFT {
 }
 
 contract TestScenarios_Create is Script {
-
     // ── Raffle parameters ─────────────────────────────────────────────────────
-    uint256 constant DURATION     = 3 minutes;
-    uint256 constant TICKET_PRICE = 1e6;       // 1 USDC (6 decimals)
-    uint256 constant PRIZE_AMOUNT = 10e6;      // 10 USDC
-    uint256 constant FEE_BPS      = 250;       // 2.5%
+    uint256 constant DURATION = 3 minutes;
+    uint256 constant TICKET_PRICE = 1e6; // 1 USDC (6 decimals)
+    uint256 constant PRIZE_AMOUNT = 10e6; // 10 USDC
+    uint256 constant FEE_BPS = 250; // 2.5%
 
     // ── Shared state set in run(), used by helpers ────────────────────────────
     address raffleManager;
@@ -70,14 +69,14 @@ contract TestScenarios_Create is Script {
     uint256 participant2Key;
 
     function run() external {
-        raffleManager   = vm.envAddress("RAFFLE_MANAGER");
-        mockUsdc        = vm.envAddress("MOCK_USDC");
-        mockNft         = vm.envAddress("MOCK_NFT");
-        deployerKey     = vm.envUint("DEPLOYER_PRIVATE_KEY");
+        raffleManager = vm.envAddress("RAFFLE_MANAGER");
+        mockUsdc = vm.envAddress("MOCK_USDC");
+        mockNft = vm.envAddress("MOCK_NFT");
+        deployerKey = vm.envUint("DEPLOYER_PRIVATE_KEY");
         participant1Key = vm.envUint("PARTICIPANT_1_KEY");
         participant2Key = vm.envUint("PARTICIPANT_2_KEY");
 
-        address host         = vm.addr(deployerKey);
+        address host = vm.addr(deployerKey);
         address participant1 = vm.addr(participant1Key);
         address participant2 = vm.addr(participant2Key);
 
@@ -121,8 +120,8 @@ contract TestScenarios_Create is Script {
     /// @dev Raffles 1–4: standard ERC-20 prize scenarios.
     /// Returns the first raffle ID created (IDs are sequential from there).
     function _createERC20Raffles() internal returns (uint256 firstId) {
-        RaffleManager3 mgr  = RaffleManager3(raffleManager);
-        IERC20         usdc = IERC20(mockUsdc);
+        RaffleManager3 mgr = RaffleManager3(raffleManager);
+        IERC20 usdc = IERC20(mockUsdc);
 
         // Raffle 1 – ERC-20 full-fill + fee
         // maxCap=2, P1 buys 1, P2 buys 1
@@ -191,8 +190,8 @@ contract TestScenarios_Create is Script {
     /// @dev Raffles 5–6: special ERC-20 scenarios.
     /// Returns the first raffle ID created.
     function _createSpecialERC20Raffles() internal returns (uint256 firstId) {
-        RaffleManager3 mgr  = RaffleManager3(raffleManager);
-        IERC20         usdc = IERC20(mockUsdc);
+        RaffleManager3 mgr = RaffleManager3(raffleManager);
+        IERC20 usdc = IERC20(mockUsdc);
 
         // Raffle 5 – prize asset = payment token (USDC prize + USDC tickets)
         vm.startBroadcast(deployerKey);
@@ -234,9 +233,9 @@ contract TestScenarios_Create is Script {
     /// @dev Raffles 7–8: ERC-721 prize scenarios.
     /// Returns the first raffle ID created.
     function _createERC721Raffles() internal returns (uint256 firstId) {
-        RaffleManager3 mgr  = RaffleManager3(raffleManager);
-        IERC20         usdc = IERC20(mockUsdc);
-        address        host = vm.addr(deployerKey);
+        RaffleManager3 mgr = RaffleManager3(raffleManager);
+        IERC20 usdc = IERC20(mockUsdc);
+        address host = vm.addr(deployerKey);
 
         // Raffle 7 – ERC-721 full-fill
         uint256 tokenId1;

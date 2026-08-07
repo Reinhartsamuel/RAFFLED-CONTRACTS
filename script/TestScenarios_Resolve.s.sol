@@ -2,7 +2,7 @@
 pragma solidity ^0.8.24;
 
 import {Script, console} from "forge-std/Script.sol";
-import {RaffleManager3}  from "../src/RaffleManager3.sol";
+import {RaffleManager3} from "../src/RaffleManager3.sol";
 
 /// @notice Phase B – resolve all test raffles created by TestScenarios_Create.
 ///
@@ -51,10 +51,9 @@ import {RaffleManager3}  from "../src/RaffleManager3.sol";
 /// ─────────────────────────────────────────────────────────────────────────────
 
 contract TestScenarios_Resolve is Script {
-
     function run() external {
         address raffleManager = vm.envAddress("RAFFLE_MANAGER");
-        uint256 deployerKey   = vm.envUint("DEPLOYER_PRIVATE_KEY");
+        uint256 deployerKey = vm.envUint("DEPLOYER_PRIVATE_KEY");
 
         uint256 id1 = vm.envUint("RAFFLE_ID_1");
         uint256 id2 = vm.envUint("RAFFLE_ID_2");

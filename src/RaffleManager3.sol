@@ -1,16 +1,18 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import {VRFConsumerBaseV2Plus}          from "@chainlink/contracts/src/v0.8/vrf/dev/VRFConsumerBaseV2Plus.sol";
-import {VRFV2PlusClient}                from "@chainlink/contracts/src/v0.8/vrf/dev/libraries/VRFV2PlusClient.sol";
-import {AutomationCompatibleInterface}  from "@chainlink/contracts/src/v0.8/automation/interfaces/AutomationCompatibleInterface.sol";
-import {ReentrancyGuard}                from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-import {IERC20}                         from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {IERC20Metadata}                 from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
-import {SafeERC20}                      from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {IERC721}                        from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
-import {IERC721Receiver}                from "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
-import {IERC721Metadata}                from "@openzeppelin/contracts/token/ERC721/extensions/IERC721Metadata.sol";
+import {VRFConsumerBaseV2Plus} from "@chainlink/contracts/src/v0.8/vrf/dev/VRFConsumerBaseV2Plus.sol";
+import {VRFV2PlusClient} from "@chainlink/contracts/src/v0.8/vrf/dev/libraries/VRFV2PlusClient.sol";
+import {
+    AutomationCompatibleInterface
+} from "@chainlink/contracts/src/v0.8/automation/interfaces/AutomationCompatibleInterface.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {IERC721} from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
+import {IERC721Receiver} from "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
+import {IERC721Metadata} from "@openzeppelin/contracts/token/ERC721/extensions/IERC721Metadata.sol";
 
 /// @title  RaffleManager3
 /// @notice Gas-optimised raffle system backed by Chainlink VRF v2.5 and Automation.
@@ -37,12 +39,7 @@ import {IERC721Metadata}                from "@openzeppelin/contracts/token/ERC7
 ///   Slot 2 │ prizeAmountOrTokenId  32 B  (amount for ERC-20; tokenId for ERC-721)
 ///   Slot 3 │ ticketPrice           32 B
 ///   Slot 4 │ maxCap                32 B
-contract RaffleManager3 is
-    VRFConsumerBaseV2Plus,
-    AutomationCompatibleInterface,
-    IERC721Receiver,
-    ReentrancyGuard
-{
+contract RaffleManager3 is VRFConsumerBaseV2Plus, AutomationCompatibleInterface, IERC721Receiver, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     // ──────────────────────────────────────────────────────────────────────
@@ -50,23 +47,29 @@ contract RaffleManager3 is
     // ──────────────────────────────────────────────────────────────────────
 
     /// @notice Lifecycle states for a raffle.
-    enum RaffleStatus { OPEN, COMPLETED }
+    enum RaffleStatus {
+        OPEN,
+        COMPLETED
+    }
 
     /// @notice Distinguishes prize type to branch distribution logic.
-    enum PrizeType { ERC20, ERC721 }
+    enum PrizeType {
+        ERC20,
+        ERC721
+    }
 
     /// @notice Per-raffle state – tightly packed into 5 EVM slots.
     struct RaffleData {
-        address      host;                  // 20 B  ┐
-        uint48       expiry;                //  6 B  │ Slot 0  (29 B used)
-        RaffleStatus status;                //  1 B  │
-        bool         underfilled;           //  1 B  │
-        PrizeType    prizeType;             //  1 B  ┘
-        address      prizeAsset;            // 20 B  ┐
-        uint96       ticketsSold;           // 12 B  ┘ Slot 1  (32 B used)
-        uint256      prizeAmountOrTokenId;  // 32 B     Slot 2
-        uint256      ticketPrice;           // 32 B     Slot 3
-        uint256      maxCap;               // 32 B     Slot 4
+        address host; // 20 B  ┐
+        uint48 expiry; //  6 B  │ Slot 0  (29 B used)
+        RaffleStatus status; //  1 B  │
+        bool underfilled; //  1 B  │
+        PrizeType prizeType; //  1 B  ┘
+        address prizeAsset; // 20 B  ┐
+        uint96 ticketsSold; // 12 B  ┘ Slot 1  (32 B used)
+        uint256 prizeAmountOrTokenId; // 32 B     Slot 2
+        uint256 ticketPrice; // 32 B     Slot 3
+        uint256 maxCap; // 32 B     Slot 4
     }
 
     // ──────────────────────────────────────────────────────────────────────
@@ -74,13 +77,13 @@ contract RaffleManager3 is
     // ──────────────────────────────────────────────────────────────────────
 
     /// @notice Raffle data, keyed by 1-based raffleId.
-    mapping(uint256 => RaffleData)  public raffles;
+    mapping(uint256 => RaffleData) public raffles;
 
     /// @notice Participant array – address appears once per ticket.
-    mapping(uint256 => address[])   public participants;
+    mapping(uint256 => address[]) public participants;
 
     /// @notice Maps a VRF requestId back to the raffle that requested it.
-    mapping(uint256 => uint256)     private requestIdToRaffleId;
+    mapping(uint256 => uint256) private requestIdToRaffleId;
 
     /// @notice Monotonically increasing raffle counter (1-based).
     uint256 public raffleCount;
@@ -112,9 +115,9 @@ contract RaffleManager3 is
     bytes32 private immutable s_keyHash;
     uint256 private immutable s_subId;
 
-    uint16  private constant REQUEST_CONFIRMATIONS = 3;
-    uint32  private constant CALLBACK_GAS_LIMIT    = 300_000;
-    uint32  private constant NUM_WORDS             = 1;
+    uint16 private constant REQUEST_CONFIRMATIONS = 3;
+    uint32 private constant CALLBACK_GAS_LIMIT = 300_000;
+    uint32 private constant NUM_WORDS = 1;
 
     // ──────────────────────────────────────────────────────────────────────
     // Events
@@ -126,8 +129,8 @@ contract RaffleManager3 is
         address prizeAsset,
         PrizeType prizeType,
         uint256 prizeAmountOrTokenId,
-        uint48  expiry,
-        string  prizeSymbol,
+        uint48 expiry,
+        string prizeSymbol,
         uint256 decimals
     );
     event TicketPurchased(uint256 indexed raffleId, address indexed buyer, uint256 ticketCount);
@@ -156,21 +159,16 @@ contract RaffleManager3 is
     // Constructor
     // ──────────────────────────────────────────────────────────────────────
 
-    constructor(
-        address _vrfCoordinator,
-        bytes32 _keyHash,
-        uint256 _subId,
-        address _paymentToken,
-        address _treasury
-    )
+    constructor(address _vrfCoordinator, bytes32 _keyHash, uint256 _subId, address _paymentToken, address _treasury)
         VRFConsumerBaseV2Plus(_vrfCoordinator)
     {
-        if (_paymentToken == address(0) || _treasury == address(0))
+        if (_paymentToken == address(0) || _treasury == address(0)) {
             revert InvalidParams();
-        s_keyHash    = _keyHash;
-        s_subId      = _subId;
+        }
+        s_keyHash = _keyHash;
+        s_subId = _subId;
         paymentToken = _paymentToken;
-        treasury     = _treasury;
+        treasury = _treasury;
     }
 
     // ──────────────────────────────────────────────────────────────────────
@@ -180,9 +178,10 @@ contract RaffleManager3 is
     /// @notice Propose a new platform fee. Becomes active after FEE_TIMELOCK.
     /// @param  _newFeeBps New fee in basis points (max MAX_PLATFORM_FEE_BPS).
     function proposeFeeChange(uint256 _newFeeBps) external onlyOwner {
-        if (_newFeeBps > MAX_PLATFORM_FEE_BPS)
+        if (_newFeeBps > MAX_PLATFORM_FEE_BPS) {
             revert FeeTooHigh(_newFeeBps, MAX_PLATFORM_FEE_BPS);
-        pendingFeeBps        = _newFeeBps;
+        }
+        pendingFeeBps = _newFeeBps;
         feeChangeEffectiveAt = block.timestamp + FEE_TIMELOCK;
         emit FeeChangeProposed(_newFeeBps, feeChangeEffectiveAt);
     }
@@ -190,11 +189,12 @@ contract RaffleManager3 is
     /// @notice Apply the pending fee change after the timelock has elapsed.
     function applyFeeChange() external onlyOwner {
         if (feeChangeEffectiveAt == 0) revert NoFeeChangePending();
-        if (block.timestamp < feeChangeEffectiveAt)
+        if (block.timestamp < feeChangeEffectiveAt) {
             revert FeeTimelockNotElapsed(feeChangeEffectiveAt);
-        uint256 oldFee   = platformFeeBps;
-        platformFeeBps   = pendingFeeBps;
-        pendingFeeBps    = 0;
+        }
+        uint256 oldFee = platformFeeBps;
+        platformFeeBps = pendingFeeBps;
+        pendingFeeBps = 0;
         feeChangeEffectiveAt = 0;
         emit FeeChangeApplied(oldFee, platformFeeBps);
     }
@@ -204,9 +204,7 @@ contract RaffleManager3 is
     // ──────────────────────────────────────────────────────────────────────
 
     /// @inheritdoc IERC721Receiver
-    function onERC721Received(address, address, uint256, bytes calldata)
-        external pure override returns (bytes4)
-    {
+    function onERC721Received(address, address, uint256, bytes calldata) external pure override returns (bytes4) {
         return IERC721Receiver.onERC721Received.selector;
     }
 
@@ -228,22 +226,21 @@ contract RaffleManager3 is
         uint256 _maxCap,
         uint256 _duration
     ) external returns (uint256 raffleId) {
-        if (_asset == address(0) || _amount == 0 || _ticketPrice == 0
-            || _maxCap == 0 || _duration == 0)
+        if (_asset == address(0) || _amount == 0 || _ticketPrice == 0 || _maxCap == 0 || _duration == 0) {
             revert InvalidParams();
+        }
         if (_maxCap > type(uint96).max) revert InvalidParams();
 
-        raffleId = _initRaffle(
-            msg.sender, _asset, PrizeType.ERC20, _amount, _ticketPrice, _maxCap, _duration
-        );
+        raffleId = _initRaffle(msg.sender, _asset, PrizeType.ERC20, _amount, _ticketPrice, _maxCap, _duration);
 
         IERC20(_asset).safeTransferFrom(msg.sender, address(this), _amount);
 
         string memory sym = IERC20Metadata(_asset).symbol();
-        uint256 dec       = IERC20Metadata(_asset).decimals();
+        uint256 dec = IERC20Metadata(_asset).decimals();
 
-        emit RaffleCreated(raffleId, msg.sender, _asset, PrizeType.ERC20, _amount,
-            uint48(block.timestamp + _duration), sym, dec);
+        emit RaffleCreated(
+            raffleId, msg.sender, _asset, PrizeType.ERC20, _amount, uint48(block.timestamp + _duration), sym, dec
+        );
     }
 
     /// @notice Create a raffle with an ERC-721 NFT prize.
@@ -260,23 +257,25 @@ contract RaffleManager3 is
         uint256 _maxCap,
         uint256 _duration
     ) external returns (uint256 raffleId) {
-        if (_nft == address(0) || _ticketPrice == 0 || _maxCap == 0 || _duration == 0)
+        if (_nft == address(0) || _ticketPrice == 0 || _maxCap == 0 || _duration == 0) {
             revert InvalidParams();
+        }
         if (_maxCap > type(uint96).max) revert InvalidParams();
 
-        raffleId = _initRaffle(
-            msg.sender, _nft, PrizeType.ERC721, _tokenId, _ticketPrice, _maxCap, _duration
-        );
+        raffleId = _initRaffle(msg.sender, _nft, PrizeType.ERC721, _tokenId, _ticketPrice, _maxCap, _duration);
 
         // safeTransferFrom triggers onERC721Received on this contract
         IERC721(_nft).safeTransferFrom(msg.sender, address(this), _tokenId);
 
         string memory sym = "";
         // Attempt symbol fetch; not mandatory for ERC-721
-        try IERC721Metadata(_nft).name() returns (string memory n) { sym = n; } catch {}
+        try IERC721Metadata(_nft).name() returns (string memory n) {
+            sym = n;
+        } catch {}
 
-        emit RaffleCreated(raffleId, msg.sender, _nft, PrizeType.ERC721, _tokenId,
-            uint48(block.timestamp + _duration), sym, 0);
+        emit RaffleCreated(
+            raffleId, msg.sender, _nft, PrizeType.ERC721, _tokenId, uint48(block.timestamp + _duration), sym, 0
+        );
     }
 
     // ──────────────────────────────────────────────────────────────────────
@@ -286,21 +285,23 @@ contract RaffleManager3 is
     /// @notice Buy one or more tickets. Payment is in the contract's paymentToken.
     /// @param  _raffleId    Target raffle.
     /// @param  _ticketCount Number of tickets to purchase.
-    function enterRaffle(uint256 _raffleId, uint256 _ticketCount)
-        external nonReentrant
-    {
+    function enterRaffle(uint256 _raffleId, uint256 _ticketCount) external nonReentrant {
         RaffleData storage raffle = raffles[_raffleId];
 
-        if (raffle.status != RaffleStatus.OPEN || block.timestamp >= raffle.expiry)
+        if (raffle.status != RaffleStatus.OPEN || block.timestamp >= raffle.expiry) {
             revert RaffleNotOpen(_raffleId);
-        if (msg.sender == raffle.host)
+        }
+        if (msg.sender == raffle.host) {
             revert HostCannotEnter(_raffleId);
-        if (_ticketCount == 0)
+        }
+        if (_ticketCount == 0) {
             revert InvalidParams();
+        }
 
         uint96 sold = raffle.ticketsSold;
-        if (sold + _ticketCount > raffle.maxCap)
+        if (sold + _ticketCount > raffle.maxCap) {
             revert MaxCapReached(_raffleId);
+        }
 
         uint256 totalCost = raffle.ticketPrice * _ticketCount;
         IERC20(paymentToken).safeTransferFrom(msg.sender, address(this), totalCost);
@@ -308,9 +309,11 @@ contract RaffleManager3 is
         raffle.ticketsSold = sold + uint96(_ticketCount);
 
         address[] storage arr = participants[_raffleId];
-        for (uint256 i; i < _ticketCount; ) {
+        for (uint256 i; i < _ticketCount;) {
             arr.push(msg.sender);
-            unchecked { ++i; }
+            unchecked {
+                ++i;
+            }
         }
 
         emit TicketPurchased(_raffleId, msg.sender, _ticketCount);
@@ -321,17 +324,14 @@ contract RaffleManager3 is
     // ──────────────────────────────────────────────────────────────────────
 
     /// @inheritdoc AutomationCompatibleInterface
-    function checkUpkeep(bytes calldata)
-        external view override
-        returns (bool, bytes memory)
-    {
-        for (uint256 i = 1; i <= raffleCount; ) {
-            if (raffles[i].status == RaffleStatus.OPEN
-                && block.timestamp >= raffles[i].expiry)
-            {
+    function checkUpkeep(bytes calldata) external view override returns (bool, bytes memory) {
+        for (uint256 i = 1; i <= raffleCount;) {
+            if (raffles[i].status == RaffleStatus.OPEN && block.timestamp >= raffles[i].expiry) {
                 return (true, abi.encode(i));
             }
-            unchecked { ++i; }
+            unchecked {
+                ++i;
+            }
         }
         return (false, "");
     }
@@ -341,8 +341,9 @@ contract RaffleManager3 is
         uint256 raffleId = abi.decode(performData, (uint256));
         RaffleData storage raffle = raffles[raffleId];
 
-        if (raffle.status != RaffleStatus.OPEN || block.timestamp < raffle.expiry)
+        if (raffle.status != RaffleStatus.OPEN || block.timestamp < raffle.expiry) {
             return;
+        }
 
         // Zero participants → return prize, mark completed
         if (participants[raffleId].length == 0) {
@@ -361,14 +362,12 @@ contract RaffleManager3 is
         // Request VRF for both full-fill and underfill paths
         uint256 requestId = s_vrfCoordinator.requestRandomWords(
             VRFV2PlusClient.RandomWordsRequest({
-                keyHash:              s_keyHash,
-                subId:                s_subId,
+                keyHash: s_keyHash,
+                subId: s_subId,
                 requestConfirmations: REQUEST_CONFIRMATIONS,
-                callbackGasLimit:     CALLBACK_GAS_LIMIT,
-                numWords:             NUM_WORDS,
-                extraArgs:            VRFV2PlusClient._argsToBytes(
-                    VRFV2PlusClient.ExtraArgsV1({ nativePayment: false })
-                )
+                callbackGasLimit: CALLBACK_GAS_LIMIT,
+                numWords: NUM_WORDS,
+                extraArgs: VRFV2PlusClient._argsToBytes(VRFV2PlusClient.ExtraArgsV1({nativePayment: false}))
             })
         );
 
@@ -381,9 +380,7 @@ contract RaffleManager3 is
     // ──────────────────────────────────────────────────────────────────────
 
     /// @inheritdoc VRFConsumerBaseV2Plus
-    function fulfillRandomWords(uint256 _requestId, uint256[] calldata _randomWords)
-        internal override nonReentrant
-    {
+    function fulfillRandomWords(uint256 _requestId, uint256[] calldata _randomWords) internal override nonReentrant {
         uint256 raffleId = requestIdToRaffleId[_requestId];
         delete requestIdToRaffleId[_requestId];
 
@@ -393,7 +390,7 @@ contract RaffleManager3 is
         address[] storage parts = participants[raffleId];
         uint256 len = parts.length;
         uint256 winnerIndex = _randomWords[0] % len;
-        address winner      = parts[winnerIndex];
+        address winner = parts[winnerIndex];
 
         raffle.status = RaffleStatus.COMPLETED;
         _distribute(raffleId, raffle, winner);
@@ -406,22 +403,23 @@ contract RaffleManager3 is
     // ──────────────────────────────────────────────────────────────────────
 
     /// @notice Manually select a winner by participant index. Callable after expiry.
-    function manualFulfillWinner(uint256 _raffleId, uint256 _winnerIndex)
-        external nonReentrant
-    {
+    function manualFulfillWinner(uint256 _raffleId, uint256 _winnerIndex) external nonReentrant {
         RaffleData storage raffle = raffles[_raffleId];
 
-        if (raffle.status != RaffleStatus.OPEN)
+        if (raffle.status != RaffleStatus.OPEN) {
             revert RaffleNotOpen(_raffleId);
-        if (block.timestamp < raffle.expiry)
+        }
+        if (block.timestamp < raffle.expiry) {
             revert RaffleNotExpired(_raffleId);
+        }
 
         address[] storage parts = participants[_raffleId];
-        if (_winnerIndex >= parts.length)
+        if (_winnerIndex >= parts.length) {
             revert InvalidParams();
+        }
 
         address winner = parts[_winnerIndex];
-        raffle.status  = RaffleStatus.COMPLETED;
+        raffle.status = RaffleStatus.COMPLETED;
 
         // Handle underfill prize return if performUpkeep was not called
         if (raffle.ticketsSold < raffle.maxCap && !raffle.underfilled) {
@@ -434,23 +432,24 @@ contract RaffleManager3 is
     }
 
     /// @notice Manually select a winner using a random word. Callable after expiry.
-    function manualFulfillWinnerByRandomWord(uint256 _raffleId, uint256 _randomWord)
-        external nonReentrant
-    {
+    function manualFulfillWinnerByRandomWord(uint256 _raffleId, uint256 _randomWord) external nonReentrant {
         RaffleData storage raffle = raffles[_raffleId];
 
-        if (raffle.status != RaffleStatus.OPEN)
+        if (raffle.status != RaffleStatus.OPEN) {
             revert RaffleNotOpen(_raffleId);
-        if (block.timestamp < raffle.expiry)
+        }
+        if (block.timestamp < raffle.expiry) {
             revert RaffleNotExpired(_raffleId);
+        }
 
         address[] storage parts = participants[_raffleId];
-        if (parts.length == 0)
+        if (parts.length == 0) {
             revert InvalidParams();
+        }
 
         uint256 winnerIndex = _randomWord % parts.length;
-        address winner      = parts[winnerIndex];
-        raffle.status       = RaffleStatus.COMPLETED;
+        address winner = parts[winnerIndex];
+        raffle.status = RaffleStatus.COMPLETED;
 
         // Handle underfill prize return if performUpkeep was not called
         if (raffle.ticketsSold < raffle.maxCap && !raffle.underfilled) {
@@ -487,25 +486,23 @@ contract RaffleManager3 is
     ) internal returns (uint256 raffleId) {
         raffleId = ++raffleCount;
         raffles[raffleId] = RaffleData({
-            host:                 _host,
-            expiry:               uint48(block.timestamp + _duration),
-            status:               RaffleStatus.OPEN,
-            underfilled:          false,
-            prizeType:            _prizeType,
-            prizeAsset:           _asset,
-            ticketsSold:          0,
+            host: _host,
+            expiry: uint48(block.timestamp + _duration),
+            status: RaffleStatus.OPEN,
+            underfilled: false,
+            prizeType: _prizeType,
+            prizeAsset: _asset,
+            ticketsSold: 0,
             prizeAmountOrTokenId: _prizeAmountOrTokenId,
-            ticketPrice:          _ticketPrice,
-            maxCap:               _maxCap
+            ticketPrice: _ticketPrice,
+            maxCap: _maxCap
         });
     }
 
     /// @dev Return the prize to the host (called for zero-participant or underfilled raffles).
     function _returnPrizeToHost(uint256 _raffleId, RaffleData storage _raffle) internal {
         if (_raffle.prizeType == PrizeType.ERC721) {
-            IERC721(_raffle.prizeAsset).safeTransferFrom(
-                address(this), _raffle.host, _raffle.prizeAmountOrTokenId
-            );
+            IERC721(_raffle.prizeAsset).safeTransferFrom(address(this), _raffle.host, _raffle.prizeAmountOrTokenId);
         } else {
             IERC20(_raffle.prizeAsset).safeTransfer(_raffle.host, _raffle.prizeAmountOrTokenId);
         }
@@ -532,13 +529,9 @@ contract RaffleManager3 is
     ///    - winner gets the NFT
     ///    - host   gets paymentPool − paymentFee
     ///    - treasury gets paymentFee
-    function _distribute(
-        uint256 _raffleId,
-        RaffleData storage _raffle,
-        address _winner
-    ) internal {
+    function _distribute(uint256 _raffleId, RaffleData storage _raffle, address _winner) internal {
         uint256 paymentPool = uint256(_raffle.ticketsSold) * _raffle.ticketPrice;
-        uint256 paymentFee  = _computeFee(paymentPool);
+        uint256 paymentFee = _computeFee(paymentPool);
 
         if (_raffle.underfilled) {
             // Prize already returned; distribute payment pool to winner
@@ -549,9 +542,7 @@ contract RaffleManager3 is
             }
         } else if (_raffle.prizeType == PrizeType.ERC721) {
             // Full-fill with NFT prize – NFT is indivisible, no prize fee
-            IERC721(_raffle.prizeAsset).safeTransferFrom(
-                address(this), _winner, _raffle.prizeAmountOrTokenId
-            );
+            IERC721(_raffle.prizeAsset).safeTransferFrom(address(this), _winner, _raffle.prizeAmountOrTokenId);
             IERC20(paymentToken).safeTransfer(_raffle.host, paymentPool - paymentFee);
             if (paymentFee > 0) {
                 IERC20(paymentToken).safeTransfer(treasury, paymentFee);
@@ -564,9 +555,9 @@ contract RaffleManager3 is
             IERC20(paymentToken).safeTransfer(_raffle.host, paymentPool - paymentFee);
 
             uint256 totalFees = prizeFee + paymentFee;
-            if (prizeFee > 0)   IERC20(_raffle.prizeAsset).safeTransfer(treasury, prizeFee);
+            if (prizeFee > 0) IERC20(_raffle.prizeAsset).safeTransfer(treasury, prizeFee);
             if (paymentFee > 0) IERC20(paymentToken).safeTransfer(treasury, paymentFee);
-            if (totalFees > 0)  emit PlatformFeeCollected(_raffleId, totalFees);
+            if (totalFees > 0) emit PlatformFeeCollected(_raffleId, totalFees);
         }
     }
 }

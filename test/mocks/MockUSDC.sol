@@ -4,8 +4,8 @@ pragma solidity ^0.8.24;
 /// @notice ERC-20 that deliberately returns **nothing** from transfer /
 ///         transferFrom / approve.  SafeERC20 must handle this correctly.
 contract MockUSDC {
-    mapping(address => uint256)                          private _bal;
-    mapping(address => mapping(address => uint256))      private _allow;
+    mapping(address => uint256) private _bal;
+    mapping(address => mapping(address => uint256)) private _allow;
 
     constructor(uint256 supply) {
         _bal[msg.sender] = supply;
@@ -19,7 +19,7 @@ contract MockUSDC {
 
     function transfer(address to, uint256 amount) external {
         _bal[msg.sender] -= amount;
-        _bal[to]         += amount;
+        _bal[to] += amount;
     }
 
     function approve(address spender, uint256 amount) external {
@@ -28,9 +28,10 @@ contract MockUSDC {
 
     function transferFrom(address from, address to, uint256 amount) external {
         _allow[from][msg.sender] -= amount;
-        _bal[from]               -= amount;
-        _bal[to]                 += amount;
+        _bal[from] -= amount;
+        _bal[to] += amount;
     }
+
     function symbol() public pure returns (string memory) {
         return "USDC";
     }

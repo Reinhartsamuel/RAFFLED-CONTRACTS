@@ -1,22 +1,22 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import {Test}                   from "forge-std/Test.sol";
-import {RaffleManager3}         from "../src/RaffleManager3.sol";
+import {Test} from "forge-std/Test.sol";
+import {RaffleManager3} from "../src/RaffleManager3.sol";
 import {VRFCoordinatorV2_5Mock} from "./mocks/VRFCoordinatorV2_5Mock.sol";
-import {StandardERC20}          from "./mocks/StandardERC20.sol";
-import {MockERC721}             from "./mocks/MockERC721.sol";
-import {IERC20}                 from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {IERC721}                from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
+import {StandardERC20} from "./mocks/StandardERC20.sol";
+import {MockERC721} from "./mocks/MockERC721.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IERC721} from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 
 /// @notice Comprehensive test suite for RaffleManager3.
 contract Raffle3Test is Test {
     // ─── Contracts ──────────────────────────────────────────────────────────
-    RaffleManager3         mgr;
+    RaffleManager3 mgr;
     VRFCoordinatorV2_5Mock coord;
-    StandardERC20          prize;
-    StandardERC20          usdc;
-    MockERC721             nft;
+    StandardERC20 prize;
+    StandardERC20 usdc;
+    MockERC721 nft;
 
     // ─── Accounts ───────────────────────────────────────────────────────────
     address HOST;
@@ -25,30 +25,28 @@ contract Raffle3Test is Test {
     address TREASURY;
 
     // ─── Constants ──────────────────────────────────────────────────────────
-    bytes32 constant KEYHASH      = keccak256("test_keyhash");
-    uint256 constant SUB_ID       = 1;
-    uint256 constant PRIZE_AMT    = 1_000e18;
-    uint256 constant TICKET_PRICE = 10e18;     // 10 USDC per ticket
-    uint256 constant MAX_CAP      = 100;
-    uint256 constant DURATION     = 1 days;
-    uint256 constant FEE_BPS      = 250;       // 2.5%
+    bytes32 constant KEYHASH = keccak256("test_keyhash");
+    uint256 constant SUB_ID = 1;
+    uint256 constant PRIZE_AMT = 1_000e18;
+    uint256 constant TICKET_PRICE = 10e18; // 10 USDC per ticket
+    uint256 constant MAX_CAP = 100;
+    uint256 constant DURATION = 1 days;
+    uint256 constant FEE_BPS = 250; // 2.5%
     uint256 constant NFT_TOKEN_ID = 42;
 
     // ─── Setup ──────────────────────────────────────────────────────────────
     function setUp() external {
-        HOST     = makeAddr("host");
-        ALICE    = makeAddr("alice");
-        BOB      = makeAddr("bob");
+        HOST = makeAddr("host");
+        ALICE = makeAddr("alice");
+        BOB = makeAddr("bob");
         TREASURY = makeAddr("treasury");
 
         coord = new VRFCoordinatorV2_5Mock();
         prize = new StandardERC20("Prize", "PZ", 100_000e18);
-        usdc  = new StandardERC20("USDC", "USDC", 1_000_000e18);
-        nft   = new MockERC721();
+        usdc = new StandardERC20("USDC", "USDC", 1_000_000e18);
+        nft = new MockERC721();
 
-        mgr = new RaffleManager3(
-            address(coord), KEYHASH, SUB_ID, address(usdc), TREASURY
-        );
+        mgr = new RaffleManager3(address(coord), KEYHASH, SUB_ID, address(usdc), TREASURY);
 
         // Set platform fee
         mgr.proposeFeeChange(FEE_BPS);
@@ -58,7 +56,7 @@ contract Raffle3Test is Test {
         // Distribute ERC-20 tokens
         prize.transfer(HOST, 50_000e18);
         usdc.transfer(ALICE, 100_000e18);
-        usdc.transfer(BOB,   100_000e18);
+        usdc.transfer(BOB, 100_000e18);
 
         // Mint NFT to HOST
         nft.mint(HOST, NFT_TOKEN_ID);
@@ -80,7 +78,9 @@ contract Raffle3Test is Test {
         return mgr.createRaffleERC721(address(nft), NFT_TOKEN_ID, TICKET_PRICE, MAX_CAP, DURATION);
     }
 
-    function _warp() internal { vm.warp(block.timestamp + DURATION + 1); }
+    function _warp() internal {
+        vm.warp(block.timestamp + DURATION + 1);
+    }
 
     function _triggerUpkeep() internal returns (uint256) {
         (bool needed, bytes memory data) = mgr.checkUpkeep("");
@@ -115,8 +115,7 @@ contract Raffle3Test is Test {
 
         vm.expectEmit(true, true, false, true);
         emit RaffleManager3.RaffleCreated(
-            1, HOST, address(prize), RaffleManager3.PrizeType.ERC20,
-            PRIZE_AMT, expectedExpiry, "PZ", 18
+            1, HOST, address(prize), RaffleManager3.PrizeType.ERC20, PRIZE_AMT, expectedExpiry, "PZ", 18
         );
 
         vm.prank(HOST);
@@ -127,14 +126,14 @@ contract Raffle3Test is Test {
         uint256 id = _createERC20();
         RaffleManager3.RaffleData memory r = mgr.getRaffle(id);
 
-        assertEq(r.host,                 HOST);
-        assertEq(uint8(r.status),        uint8(RaffleManager3.RaffleStatus.OPEN));
-        assertEq(uint8(r.prizeType),     uint8(RaffleManager3.PrizeType.ERC20));
-        assertEq(r.prizeAsset,           address(prize));
+        assertEq(r.host, HOST);
+        assertEq(uint8(r.status), uint8(RaffleManager3.RaffleStatus.OPEN));
+        assertEq(uint8(r.prizeType), uint8(RaffleManager3.PrizeType.ERC20));
+        assertEq(r.prizeAsset, address(prize));
         assertEq(r.prizeAmountOrTokenId, PRIZE_AMT);
-        assertEq(r.ticketPrice,          TICKET_PRICE);
-        assertEq(r.maxCap,               MAX_CAP);
-        assertEq(r.ticketsSold,          0);
+        assertEq(r.ticketPrice, TICKET_PRICE);
+        assertEq(r.maxCap, MAX_CAP);
+        assertEq(r.ticketsSold, 0);
         assertFalse(r.underfilled);
     }
 
@@ -174,8 +173,7 @@ contract Raffle3Test is Test {
 
         vm.expectEmit(true, true, false, true);
         emit RaffleManager3.RaffleCreated(
-            1, HOST, address(nft), RaffleManager3.PrizeType.ERC721,
-            NFT_TOKEN_ID, expectedExpiry, "MockNFT", 0
+            1, HOST, address(nft), RaffleManager3.PrizeType.ERC721, NFT_TOKEN_ID, expectedExpiry, "MockNFT", 0
         );
 
         vm.prank(HOST);
@@ -186,13 +184,13 @@ contract Raffle3Test is Test {
         uint256 id = _createERC721();
         RaffleManager3.RaffleData memory r = mgr.getRaffle(id);
 
-        assertEq(r.host,                 HOST);
-        assertEq(uint8(r.prizeType),     uint8(RaffleManager3.PrizeType.ERC721));
-        assertEq(r.prizeAsset,           address(nft));
+        assertEq(r.host, HOST);
+        assertEq(uint8(r.prizeType), uint8(RaffleManager3.PrizeType.ERC721));
+        assertEq(r.prizeAsset, address(nft));
         assertEq(r.prizeAmountOrTokenId, NFT_TOKEN_ID);
-        assertEq(r.ticketPrice,          TICKET_PRICE);
-        assertEq(r.maxCap,               MAX_CAP);
-        assertEq(r.ticketsSold,          0);
+        assertEq(r.ticketPrice, TICKET_PRICE);
+        assertEq(r.maxCap, MAX_CAP);
+        assertEq(r.ticketsSold, 0);
         assertFalse(r.underfilled);
     }
 
@@ -282,7 +280,7 @@ contract Raffle3Test is Test {
         uint256 reqId = _triggerUpkeep();
 
         uint256 preBal = prize.balanceOf(ALICE);
-        _fulfillVRF(reqId, 0);  // index 0 → ALICE
+        _fulfillVRF(reqId, 0); // index 0 → ALICE
 
         assertGt(prize.balanceOf(ALICE), preBal);
         assertEq(uint8(mgr.getRaffle(id).status), uint8(RaffleManager3.RaffleStatus.COMPLETED));
@@ -294,7 +292,7 @@ contract Raffle3Test is Test {
         _warp();
         uint256 reqId = _triggerUpkeep();
 
-        uint256 fee    = (PRIZE_AMT * FEE_BPS) / 10_000;
+        uint256 fee = (PRIZE_AMT * FEE_BPS) / 10_000;
         uint256 expect = PRIZE_AMT - fee;
 
         uint256 preBal = prize.balanceOf(ALICE);
@@ -308,8 +306,8 @@ contract Raffle3Test is Test {
         _warp();
         uint256 reqId = _triggerUpkeep();
 
-        uint256 pool       = MAX_CAP * TICKET_PRICE;
-        uint256 fee        = (pool * FEE_BPS) / 10_000;
+        uint256 pool = MAX_CAP * TICKET_PRICE;
+        uint256 fee = (pool * FEE_BPS) / 10_000;
         uint256 hostExpect = pool - fee;
 
         uint256 preBal = usdc.balanceOf(HOST);
@@ -323,14 +321,14 @@ contract Raffle3Test is Test {
         _warp();
         uint256 reqId = _triggerUpkeep();
 
-        uint256 pool       = MAX_CAP * TICKET_PRICE;
-        uint256 payFee     = (pool * FEE_BPS) / 10_000;
-        uint256 prizeFee   = (PRIZE_AMT * FEE_BPS) / 10_000;
+        uint256 pool = MAX_CAP * TICKET_PRICE;
+        uint256 payFee = (pool * FEE_BPS) / 10_000;
+        uint256 prizeFee = (PRIZE_AMT * FEE_BPS) / 10_000;
 
-        uint256 preUSDC  = usdc.balanceOf(TREASURY);
+        uint256 preUSDC = usdc.balanceOf(TREASURY);
         uint256 prePrize = prize.balanceOf(TREASURY);
         _fulfillVRF(reqId, 0);
-        assertEq(usdc.balanceOf(TREASURY)  - preUSDC,  payFee);
+        assertEq(usdc.balanceOf(TREASURY) - preUSDC, payFee);
         assertEq(prize.balanceOf(TREASURY) - prePrize, prizeFee);
     }
 
@@ -340,7 +338,7 @@ contract Raffle3Test is Test {
 
     function test_erc20_Underfill_PrizeReturnedToHost() external {
         uint256 id = _createERC20();
-        _enterAs(ALICE, id, 10);   // only 10 of 100
+        _enterAs(ALICE, id, 10); // only 10 of 100
         _warp();
 
         uint256 preBal = prize.balanceOf(HOST);
@@ -358,8 +356,8 @@ contract Raffle3Test is Test {
         _warp();
         uint256 reqId = _triggerUpkeep();
 
-        uint256 pool   = 10 * TICKET_PRICE;
-        uint256 fee    = (pool * FEE_BPS) / 10_000;
+        uint256 pool = 10 * TICKET_PRICE;
+        uint256 fee = (pool * FEE_BPS) / 10_000;
         uint256 expect = pool - fee;
 
         uint256 preBal = usdc.balanceOf(ALICE);
@@ -406,7 +404,7 @@ contract Raffle3Test is Test {
         _warp();
         uint256 reqId = _triggerUpkeep();
 
-        _fulfillVRF(reqId, 0);  // index 0 → ALICE
+        _fulfillVRF(reqId, 0); // index 0 → ALICE
 
         assertEq(nft.ownerOf(NFT_TOKEN_ID), ALICE);
     }
@@ -417,8 +415,8 @@ contract Raffle3Test is Test {
         _warp();
         uint256 reqId = _triggerUpkeep();
 
-        uint256 pool   = MAX_CAP * TICKET_PRICE;
-        uint256 fee    = (pool * FEE_BPS) / 10_000;
+        uint256 pool = MAX_CAP * TICKET_PRICE;
+        uint256 fee = (pool * FEE_BPS) / 10_000;
         uint256 expect = pool - fee;
 
         uint256 preBal = usdc.balanceOf(HOST);
@@ -432,8 +430,8 @@ contract Raffle3Test is Test {
         _warp();
         uint256 reqId = _triggerUpkeep();
 
-        uint256 pool   = MAX_CAP * TICKET_PRICE;
-        uint256 fee    = (pool * FEE_BPS) / 10_000;
+        uint256 pool = MAX_CAP * TICKET_PRICE;
+        uint256 fee = (pool * FEE_BPS) / 10_000;
 
         uint256 preBal = usdc.balanceOf(TREASURY);
         _fulfillVRF(reqId, 0);
@@ -444,7 +442,7 @@ contract Raffle3Test is Test {
     function test_erc721_FullFill_VRFWinnerIndex() external {
         uint256 id = _createERC721();
         _enterAs(ALICE, id, 60);
-        _enterAs(BOB,   id, 40);
+        _enterAs(BOB, id, 40);
         _warp();
         uint256 reqId = _triggerUpkeep();
 
@@ -477,8 +475,8 @@ contract Raffle3Test is Test {
         _warp();
         uint256 reqId = _triggerUpkeep();
 
-        uint256 pool   = 10 * TICKET_PRICE;
-        uint256 fee    = (pool * FEE_BPS) / 10_000;
+        uint256 pool = 10 * TICKET_PRICE;
+        uint256 fee = (pool * FEE_BPS) / 10_000;
         uint256 expect = pool - fee;
 
         uint256 preBal = usdc.balanceOf(ALICE);
@@ -540,10 +538,10 @@ contract Raffle3Test is Test {
     function test_manualFulfill_ERC721ByRandomWord() external {
         uint256 id = _createERC721();
         _enterAs(ALICE, id, 60);
-        _enterAs(BOB,   id, 40);
+        _enterAs(BOB, id, 40);
         _warp();
 
-        mgr.manualFulfillWinnerByRandomWord(id, 60);   // index 60 → BOB
+        mgr.manualFulfillWinnerByRandomWord(id, 60); // index 60 → BOB
         assertEq(nft.ownerOf(NFT_TOKEN_ID), BOB);
     }
 
@@ -575,8 +573,8 @@ contract Raffle3Test is Test {
         mgr.manualFulfillWinner(id, 0);
 
         assertEq(prize.balanceOf(HOST) - preHostPrize, PRIZE_AMT);
-        uint256 pool   = 10 * TICKET_PRICE;
-        uint256 fee    = (pool * FEE_BPS) / 10_000;
+        uint256 pool = 10 * TICKET_PRICE;
+        uint256 fee = (pool * FEE_BPS) / 10_000;
         assertEq(usdc.balanceOf(ALICE) - preAliceUSDC, pool - fee);
     }
 
@@ -587,10 +585,10 @@ contract Raffle3Test is Test {
 
         mgr.manualFulfillWinner(id, 0);
 
-        assertEq(nft.ownerOf(NFT_TOKEN_ID), HOST);  // NFT back to host (underfill)
+        assertEq(nft.ownerOf(NFT_TOKEN_ID), HOST); // NFT back to host (underfill)
 
-        uint256 pool   = 10 * TICKET_PRICE;
-        uint256 fee    = (pool * FEE_BPS) / 10_000;
+        uint256 pool = 10 * TICKET_PRICE;
+        uint256 fee = (pool * FEE_BPS) / 10_000;
         // Alice gets payment pool
         // (We don't check exact pre-balance math here – just that she received something)
         assertGt(usdc.balanceOf(ALICE), 100_000e18 - 10 * TICKET_PRICE);
@@ -613,10 +611,7 @@ contract Raffle3Test is Test {
     function test_fee_CannotApplyBeforeTimelock() external {
         mgr.proposeFeeChange(500);
         vm.expectRevert(
-            abi.encodeWithSelector(
-                RaffleManager3.FeeTimelockNotElapsed.selector,
-                mgr.feeChangeEffectiveAt()
-            )
+            abi.encodeWithSelector(RaffleManager3.FeeTimelockNotElapsed.selector, mgr.feeChangeEffectiveAt())
         );
         mgr.applyFeeChange();
     }
@@ -638,9 +633,7 @@ contract Raffle3Test is Test {
     function test_fee_RevertsIfTooHigh() external {
         vm.expectRevert(
             abi.encodeWithSelector(
-                RaffleManager3.FeeTooHigh.selector,
-                1_001,
-                RaffleManager3(mgr).MAX_PLATFORM_FEE_BPS()
+                RaffleManager3.FeeTooHigh.selector, 1_001, RaffleManager3(mgr).MAX_PLATFORM_FEE_BPS()
             )
         );
         mgr.proposeFeeChange(1_001);
@@ -752,7 +745,7 @@ contract Raffle3Test is Test {
 
     function fuzz_enterRaffle_NeverExceedsCap(uint256 ticketCount) external {
         ticketCount = bound(ticketCount, 1, MAX_CAP);
-        uint256 id  = _createERC20();
+        uint256 id = _createERC20();
         _enterAs(ALICE, id, ticketCount);
         assertLe(mgr.getRaffle(id).ticketsSold, MAX_CAP);
     }
@@ -760,7 +753,7 @@ contract Raffle3Test is Test {
     function fuzz_winnerIndex_AlwaysInBounds(uint256 randomWord) external {
         uint256 id = _createERC20();
         _enterAs(ALICE, id, 50);
-        _enterAs(BOB,   id, 50);
+        _enterAs(BOB, id, 50);
         _warp();
         uint256 reqId = _triggerUpkeep();
 
@@ -773,7 +766,7 @@ contract Raffle3Test is Test {
     function fuzz_erc721_winnerIndex_AlwaysInBounds(uint256 randomWord) external {
         uint256 id = _createERC721();
         _enterAs(ALICE, id, 50);
-        _enterAs(BOB,   id, 50);
+        _enterAs(BOB, id, 50);
         _warp();
         uint256 reqId = _triggerUpkeep();
 

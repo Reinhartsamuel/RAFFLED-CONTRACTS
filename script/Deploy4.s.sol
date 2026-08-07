@@ -52,10 +52,7 @@ contract Deploy4 is Script {
             "MOCK_TREASURY"
             // address(0x753dFC03b4d37B3a316D0Fe5aB9F677C0D3C20f8) // Default treasury
         );
-        address trustedSigner = vm.envOr(
-            "TRUSTED_SIGNER",
-            deployerKey != 0 ? vm.addr(deployerKey) : address(0)
-        );
+        address trustedSigner = vm.envOr("TRUSTED_SIGNER", deployerKey != 0 ? vm.addr(deployerKey) : address(0));
 
         uint256 initialFeeBps = vm.envOr("INITIAL_FEE_BPS", uint256(500));
 
@@ -70,14 +67,7 @@ contract Deploy4 is Script {
             vm.startBroadcast(deployerKey);
         }
 
-        raffle = new RaffleManager4(
-            vrfCoordinator,
-            keyHash,
-            subId,
-            paymentToken,
-            treasury,
-            trustedSigner
-        );
+        raffle = new RaffleManager4(vrfCoordinator, keyHash, subId, paymentToken, treasury, trustedSigner);
 
         if (initialFeeBps > 0) {
             raffle.proposeFeeChange(initialFeeBps);

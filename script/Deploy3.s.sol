@@ -23,7 +23,7 @@ import {RaffleManager3} from "../src/RaffleManager3.sol";
 
 /// @dev Minimal MockNFT deployed alongside RaffleManager3 for testing.
 contract MockNFT {
-    string public name   = "Mock NFT";
+    string public name = "Mock NFT";
     string public symbol = "MNFT";
 
     uint256 private _nextId = 1;
@@ -69,9 +69,7 @@ contract MockNFT {
     function safeTransferFrom(address from, address to, uint256 tokenId, bytes memory) public {
         require(_owners[tokenId] == from, "not owner");
         require(
-            _approvals[tokenId] == msg.sender
-                || _owners[tokenId] == msg.sender
-                || _operatorApprovals[from][msg.sender],
+            _approvals[tokenId] == msg.sender || _owners[tokenId] == msg.sender || _operatorApprovals[from][msg.sender],
             "not approved"
         );
         _approvals[tokenId] = address(0);
@@ -84,9 +82,10 @@ contract MockNFT {
     }
 
     function supportsInterface(bytes4 interfaceId) external pure returns (bool) {
-        return interfaceId == 0x80ac58cd  // ERC721
-            || interfaceId == 0x5b5e139f  // ERC721Metadata
-            || interfaceId == 0x01ffc9a7; // ERC165
+        return
+            interfaceId == 0x80ac58cd // ERC721
+                || interfaceId == 0x5b5e139f // ERC721Metadata
+                || interfaceId == 0x01ffc9a7; // ERC165
     }
 }
 
@@ -95,14 +94,14 @@ contract Deploy3 is Script {
         uint256 deployerKey = vm.envUint("DEPLOYER_PRIVATE_KEY");
 
         address vrfCoordinator = vm.envAddress("VRF_COORDINATOR");
-        bytes32 keyHash        = vm.envBytes32("KEY_HASH");
-        uint256 subId          = vm.envUint("SUB_ID");
-        address paymentToken   = vm.envAddress("MOCK_USDC");
-        address treasury       = vm.envAddress("MOCK_TREASURY");
+        bytes32 keyHash = vm.envBytes32("KEY_HASH");
+        uint256 subId = vm.envUint("SUB_ID");
+        address paymentToken = vm.envAddress("MOCK_USDC");
+        address treasury = vm.envAddress("MOCK_TREASURY");
 
         vm.startBroadcast(deployerKey);
         raffle = new RaffleManager3(vrfCoordinator, keyHash, subId, paymentToken, treasury);
-        nft    = new MockNFT();
+        nft = new MockNFT();
         vm.stopBroadcast();
 
         console.log("RaffleManager3 deployed:", address(raffle));

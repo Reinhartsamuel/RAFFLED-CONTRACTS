@@ -29,7 +29,6 @@ contract DeployFreeEntryVerifier is Script {
         uint256 deployerKey;
         address deployer;
 
-
         // Load deployer private key (required for broadcast)
         deployerKey = vm.envUint("DEPLOYER_PRIVATE_KEY");
         deployer = vm.addr(deployerKey);

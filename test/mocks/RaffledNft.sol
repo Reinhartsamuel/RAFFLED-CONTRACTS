@@ -8,32 +8,18 @@ contract Raffled is ERC721 {
     uint256 public nextId;
     string public baseURI;
 
-    constructor(string memory _baseURI)
-        ERC721("Raffled", "RFLD")
-    {
+    constructor(string memory _baseURI) ERC721("Raffled", "RFLD") {
         baseURI = _baseURI;
     }
 
-    function mint(address to)
-        external
-        returns (uint256 tokenId)
-    {
+    function mint(address to) external returns (uint256 tokenId) {
         tokenId = ++nextId;
         _mint(to, tokenId);
     }
 
-    function tokenURI(uint256 tokenId)
-        public
-        view
-        override
-        returns (string memory)
-    {
+    function tokenURI(uint256 tokenId) public view override returns (string memory) {
         _requireOwned(tokenId);
 
-        return string.concat(
-            baseURI,
-            Strings.toString(tokenId),
-            ".json"
-        );
+        return string.concat(baseURI, Strings.toString(tokenId), ".json");
     }
 }
