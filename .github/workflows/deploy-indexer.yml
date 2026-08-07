@@ -1,0 +1,59 @@
+name: Deploy Ponder Indexer to VPS
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "raffled-indexer/**"
+      - ".github/workflows/deploy-indexer.yml"
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Copy indexer files to VPS
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT }}
+          source: "raffled-indexer/*"
+          strip_components: 1
+          target: ~/raffled-indexer
+
+      - name: Install, start and save with PM2
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT }}
+          command_timeout: "20m"
+          script: |
+            set -e
+            cd ~/raffled-indexer
+            npm ci
+            npm run codegen
+            pm2 startOrReload ecosystem.config.cjs --update-env
+            pm2 save
+            echo "Waiting for /health..."
+            for i in $(seq 1 60); do
+              if curl -fsS http://localhost:42069/health > /dev/null 2>&1; then
+                echo "Ponder is up."
+                break
+              fi
+              if [ "$i" -eq 60 ]; then
+                echo "Ponder did not become healthy after 60s. Recent logs:"
+                pm2 logs raffled-indexer --lines 50 --nostream
+                exit 1
+              fi
+              sleep 2
+            done
+            echo "Ready status (200 = backfill complete, 503 = still syncing):"
+            curl -s -o /dev/null -w "GET /ready -> %{http_code}\n" http://localhost:42069/ready || true
+            echo "GraphQL endpoint: http://$(hostname -I | awk '{print $1}'):42069/graphql"
