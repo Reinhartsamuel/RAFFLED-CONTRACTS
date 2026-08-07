@@ -5,6 +5,7 @@ module.exports = {
       cwd: __dirname,
       script: "npm",
       args: "run start",
+      exec_mode: "fork",
       instances: 1,
       autorestart: true,
       max_memory_restart: "1G",
