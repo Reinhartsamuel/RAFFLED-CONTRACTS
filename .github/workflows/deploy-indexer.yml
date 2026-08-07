@@ -23,7 +23,7 @@ jobs:
           script: |
             set -e
             export PATH="$(npm prefix -g)/bin:$PATH"
-            cd /home/admin/repos/raffled-contract/raffled-indexer
+            cd /home/admin/repos/RAFFLED-CONTRACTS/raffled-indexer
             git pull --ff-only
             npm ci
             npm run codegen
