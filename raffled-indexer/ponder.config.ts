@@ -32,11 +32,14 @@ export default createConfig({
   chains: {
     baseSepolia: {
       id: 84532,
-      // Primary RPC from .env/.env.local, with the official Base public RPC
-      // as automatic failover so a dead provider key can't stop indexing.
+      // Primary RPC from .env/.env.local, with public RPCs as automatic
+      // failover so a dead provider key can't stop indexing. Ponder keeps
+      // a health-tracked bucket per URL and spreads load across healthy ones.
       rpc: [
         process.env.PONDER_RPC_URL_84532 ?? "https://sepolia.base.org",
         "https://sepolia.base.org",
+        "https://base-sepolia.publicnode.com",
+        "https://base-sepolia.drpc.org",
       ],
     },
   },
