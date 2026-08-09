@@ -12,6 +12,22 @@ if (!RAW_DATABASE_URL || !RAW_DATABASE_URL.startsWith("postgres")) {
   );
 }
 
+const RPC_URL = process.env.PONDER_RPC_URL_84532;
+
+if (!RPC_URL) {
+  throw new Error(
+    "FATAL: PONDER_RPC_URL_84532 is not set. This indexer requires an API-keyed RPC " +
+      "(e.g. Alchemy/QuickNode) because free public RPCs Cloudflare-ban datacenter IPs. " +
+      "Set PONDER_RPC_URL_84532 in .env.local and restart.",
+  );
+}
+
+// Realtime newHeads subscription endpoint. Ponder polls (1s) instead of
+// subscribing whenever `ws` is undefined, so derive the wss URL from the
+// same API key (https://... -> wss://...). Override with PONDER_WS_URL_84532
+// if the provider's ws endpoint differs from the http one.
+const WS_URL = process.env.PONDER_WS_URL_84532 ?? RPC_URL.replace(/^http/, "ws");
+
 // pg-connection-string >= 2.x treats sslmode=require/prefer/verify-ca as
 // aliases for verify-full, i.e. it validates the server certificate against
 // the system trust store. Aiven uses a private CA, so that fails with
@@ -32,15 +48,21 @@ export default createConfig({
   chains: {
     baseSepolia: {
       id: 84532,
-      // Primary RPC from .env/.env.local, with public RPCs as automatic
-      // failover so a dead provider key can't stop indexing. Ponder keeps
-      // a health-tracked bucket per URL and spreads load across healthy ones.
-      rpc: [
-        process.env.PONDER_RPC_URL_84532 ?? "https://sepolia.base.org",
-        "https://sepolia.base.org",
-        "https://base-sepolia.publicnode.com",
-        "https://base-sepolia.drpc.org",
-      ],
+      // API-keyed RPC only. The public endpoints (sepolia.base.org,
+      // publicnode, drpc) Cloudflare-ban the VPS's datacenter IP (HTTP 403
+      // error code 1010), so as "failover" they only add retry spam.
+      rpc: [RPC_URL],
+      // Real-time newHeads via WebSocket (eth_subscribe). Without this,
+      // Ponder polls eth_getBlockByNumber every 1s, which is what burns CU
+      // even when idle. With ws, idle blocks arrive via subscription for
+      // free; eth_getLogs only fires when a block's bloom filter matches
+      // a RaffledCore event (i.e. actual raffle activity).
+      ws: WS_URL,
+      // Pin the eth_getLogs chunk size. Without this, Ponder's adaptive
+      // range logic collapses the chunk to 1 block on RPC errors, turning
+      // the ~2.6M-block backfill into millions of per-block requests that
+      // exhaust free-tier CU quotas and drown PM2 logs in retry WARNs.
+      ethGetLogsBlockRange: 1000,
     },
   },
   contracts: {
@@ -48,9 +70,9 @@ export default createConfig({
       chain: "baseSepolia",
       abi: RaffledCoreAbi,
       address:
-        process.env.RAFFLED_CORE_ADDRESS ??
+        (process.env.RAFFLED_CORE_ADDRESS as `0x${string}` | undefined) ??
         "0xc17eee20B4990021bE9cc8eCB7833706465bb8b9",
-      startBlock: 42699846,
+      startBlock: 45269179,
     },
   },
 });
