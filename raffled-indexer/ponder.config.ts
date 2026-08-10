@@ -1,4 +1,5 @@
 import { createConfig } from "ponder";
+import { http, rateLimit } from "viem";
 
 import { RaffledCoreAbi } from "./abis/RaffledCoreAbi";
 
@@ -51,7 +52,14 @@ export default createConfig({
       // API-keyed RPC only. The public endpoints (sepolia.base.org,
       // publicnode, drpc) Cloudflare-ban the VPS's datacenter IP (HTTP 403
       // error code 1010), so as "failover" they only add retry spam.
-      rpc: [RPC_URL],
+      //
+      // Hard-cap throughput with viem's rateLimit transport: ZAN free tier
+      // allows ~270 credits/s (~20 req/s), and Ponder's burst concurrency
+      // (10 parallel) trips that cap, then retries amplify into a storm that
+      // burns the monthly credit allowance and floods PM2 logs. 4 req/s is
+      // far under the cap; the ~260-request backfill then finishes in ~1-2
+      // minutes instead of retry-looping for days.
+      rpc: rateLimit(http(RPC_URL), { requestsPerSecond: 4 }),
       // Real-time newHeads via WebSocket (eth_subscribe). Without this,
       // Ponder polls eth_getBlockByNumber every 1s, which is what burns CU
       // even when idle. With ws, idle blocks arrive via subscription for
