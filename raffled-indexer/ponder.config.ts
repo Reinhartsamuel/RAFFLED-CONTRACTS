@@ -1,5 +1,5 @@
 import { createConfig } from "ponder";
-import { http, rateLimit } from "viem";
+import { createTransport, http, type Transport } from "viem";
 
 import { RaffledCoreAbi } from "./abis/RaffledCoreAbi";
 
@@ -29,6 +29,44 @@ if (!RPC_URL) {
 // if the provider's ws endpoint differs from the http one.
 const WS_URL = process.env.PONDER_WS_URL_84532 ?? RPC_URL.replace(/^http/, "ws");
 
+// viem 2.35.0 has no rateLimit transport export, so wrap http() with a global
+// minimum-interval gate instead. ZAN free tier caps throughput at ~270
+// credits/s (~20 req/s); Ponder's 10-request concurrency bursts past that
+// cap, every burst 429s, and the retries amplify into a storm that burns the
+// monthly credit allowance. 4 req/s stays far under the cap, so the backfill
+// (~260 requests) finishes in ~1-2 minutes with zero retries and no bleed.
+function rateLimitedHttp(url: string, requestsPerSecond: number): Transport {
+  const inner = http(url);
+  const minIntervalMs = 1000 / requestsPerSecond;
+  let nextSlot = 0;
+
+  return ((args: any) => {
+    const transport = inner(args);
+    const request = transport.request.bind(transport);
+    return createTransport(
+      {
+        key: "rate-limited-http",
+        name: "HTTP (rate limited)",
+        type: "http",
+        // Ponder passes retryCount: 0 and handles retries itself at the
+        // bucket level; mirror that so viem's buildRequest doesn't add
+        // its own 3-retry layer on top.
+        retryCount: args?.retryCount ?? 0,
+        async request(body: any) {
+          const now = Date.now();
+          nextSlot = Math.max(nextSlot, now);
+          if (nextSlot > now) {
+            await new Promise((resolve) => setTimeout(resolve, nextSlot - now));
+          }
+          nextSlot += minIntervalMs;
+          return request(body);
+        },
+      },
+      transport.value,
+    );
+  }) as unknown as Transport;
+}
+
 // pg-connection-string >= 2.x treats sslmode=require/prefer/verify-ca as
 // aliases for verify-full, i.e. it validates the server certificate against
 // the system trust store. Aiven uses a private CA, so that fails with
@@ -52,14 +90,7 @@ export default createConfig({
       // API-keyed RPC only. The public endpoints (sepolia.base.org,
       // publicnode, drpc) Cloudflare-ban the VPS's datacenter IP (HTTP 403
       // error code 1010), so as "failover" they only add retry spam.
-      //
-      // Hard-cap throughput with viem's rateLimit transport: ZAN free tier
-      // allows ~270 credits/s (~20 req/s), and Ponder's burst concurrency
-      // (10 parallel) trips that cap, then retries amplify into a storm that
-      // burns the monthly credit allowance and floods PM2 logs. 4 req/s is
-      // far under the cap; the ~260-request backfill then finishes in ~1-2
-      // minutes instead of retry-looping for days.
-      rpc: rateLimit(http(RPC_URL), { requestsPerSecond: 4 }),
+      rpc: rateLimitedHttp(RPC_URL, 4),
       // Real-time newHeads via WebSocket (eth_subscribe). Without this,
       // Ponder polls eth_getBlockByNumber every 1s, which is what burns CU
       // even when idle. With ws, idle blocks arrive via subscription for
