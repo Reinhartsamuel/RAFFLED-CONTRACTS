@@ -1,0 +1,58 @@
+name: Deploy Raffled Keeper to VPS
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "raffled-keeper/**"
+      - ".github/workflows/deploy-keeper.yml"
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy on VPS
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.VPS_PORT }}
+          command_timeout: "20m"
+          script: |
+            set -e
+            export NVM_DIR="$HOME/.nvm"
+            [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+            cd /home/admin/repos/RAFFLED-CONTRACTS/raffled-keeper
+            git fetch origin main
+            git reset --hard origin/main
+            if [ ! -f .env.local ]; then
+              echo "Missing .env.local on VPS - copy .env.example and set RAFFLE_RPC_URL, RAFFLE_CONTRACT_ADDRESS, RAFFLE_RESOLVER_PRIVATE_KEY."
+              exit 1
+            fi
+            npm ci
+            npm run build
+            pm2 delete raffled-keeper || true
+            : > ~/.pm2/logs/raffled-keeper-out.log || true
+            : > ~/.pm2/logs/raffled-keeper-error.log || true
+            pm2 start npm --name raffled-keeper -- run start:dist
+            pm2 save
+            echo "pm2 saved"
+            echo "Waiting for keeper startup..."
+            for i in $(seq 1 30); do
+              if grep -q "raffled-keeper started" ~/.pm2/logs/raffled-keeper-out.log 2>/dev/null; then
+                echo "Keeper is up."
+                break
+              fi
+              if [ "$i" -eq 30 ]; then
+                echo "Keeper did not report startup within 60s. Recent logs:"
+                pm2 logs raffled-keeper --lines 50 --nostream
+                exit 1
+              fi
+              sleep 2
+            done
+            echo "Keeper process status:"
+            pm2 describe raffled-keeper | grep -E "status|uptime|restarts" || true
+            echo "Recent keeper logs:"
+            pm2 logs raffled-keeper --lines 20 --nostream

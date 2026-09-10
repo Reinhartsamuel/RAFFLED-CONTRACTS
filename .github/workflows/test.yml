@@ -44,5 +44,13 @@ jobs:
 
       - name: Run Forge tests
         run: |
-          forge test -vvv
+          forge test -vvv --no-match-contract RaffledQuiverForkTest
         id: test
+
+      - name: Run live-fork smoke tests (optional)
+        if: env.ROBINHOOD_TESTNET_RPC != ''
+        env:
+          ROBINHOOD_TESTNET_RPC: ${{ secrets.ROBINHOOD_TESTNET_RPC }}
+        run: |
+          forge test -vvv --match-contract RaffledQuiverForkTest
+        id: fork

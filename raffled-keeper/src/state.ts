@@ -1,0 +1,288 @@
+import { mkdir, open as openFile, readFile, rename, unlink, writeFile } from 'node:fs/promises';
+import { dirname, resolve } from 'node:path';
+import type { Logger } from './logger.ts';
+import type { SaltStorage } from './salt.ts';
+
+const STATE_VERSION = 1;
+const MAX_SETTLED_CACHE = 2_000;
+const MAX_SALTS_PER_RAFFLE = 64;
+const MAX_ABANDONED = 1_000;
+const FLUSH_DEBOUNCE_MS = 250;
+
+export interface QueueItem {
+  raffleId: string;
+  enqueuedAt: number;
+  attempts: number;
+  nextAttemptAt: number;
+  lastError?: string;
+}
+
+export interface AbandonedItem {
+  raffleId: string;
+  reason: string;
+  at: number;
+}
+
+interface PersistedState {
+  version: number;
+  lastScannedBlock: string | null;
+  queue: QueueItem[];
+  settled: string[];
+  abandoned: AbandonedItem[];
+  salts: Record<string, string[]>;
+}
+
+function emptyState(): PersistedState {
+  return {
+    version: STATE_VERSION,
+    lastScannedBlock: null,
+    queue: [],
+    settled: [],
+    abandoned: [],
+    salts: {},
+  };
+}
+
+/**
+ * JSON-file state store with atomic writes (tmp + rename), a debounced flush
+ * and a pid lock so two keeper processes cannot share one state file (which
+ * would double-spend salts and double-send settles).
+ *
+ * Holds the settlement queue fed by RandomnessFulfilled, the log scan cursor,
+ * the settled ring and the per-raffle salt registry.
+ */
+export class StateStore implements SaltStorage {
+  readonly #file: string;
+  readonly #lockFile: string;
+  readonly #logger: Logger;
+  #data: PersistedState;
+  #flushTimer?: NodeJS.Timeout;
+  #writeChain: Promise<void> = Promise.resolve();
+  #closed = false;
+
+  private constructor(file: string, lockFile: string, logger: Logger, data: PersistedState) {
+    this.#file = file;
+    this.#lockFile = lockFile;
+    this.#logger = logger;
+    this.#data = data;
+  }
+
+  static async open(file: string, logger: Logger): Promise<StateStore> {
+    const absolute = resolve(file);
+    await mkdir(dirname(absolute), { recursive: true });
+    const lockFile = `${absolute}.lock`;
+    await acquireLock(lockFile, logger);
+
+    let data = emptyState();
+    try {
+      const raw = await readFile(absolute, 'utf8');
+      const parsed = JSON.parse(raw) as Partial<PersistedState>;
+      if (parsed.version === STATE_VERSION) {
+        data = {
+          version: STATE_VERSION,
+          lastScannedBlock: parsed.lastScannedBlock ?? null,
+          queue: Array.isArray(parsed.queue) ? parsed.queue : [],
+          settled: Array.isArray(parsed.settled) ? parsed.settled : [],
+          abandoned: Array.isArray(parsed.abandoned) ? parsed.abandoned : [],
+          salts: parsed.salts && typeof parsed.salts === 'object' ? parsed.salts : {},
+        };
+      } else {
+        logger.warn('state file version mismatch — starting fresh', { file: absolute, found: parsed.version });
+      }
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code !== 'ENOENT') {
+        const backup = `${absolute}.corrupt-${Date.now()}`;
+        await rename(absolute, backup).catch(() => undefined);
+        logger.warn('state file unreadable — starting fresh (corrupt file preserved)', {
+          file: absolute,
+          backup,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
+    return new StateStore(absolute, lockFile, logger, data);
+  }
+
+  // ── Settlement queue ──────────────────────────────────────────────────────
+
+  /** Returns false when the raffle is already queued or already settled. */
+  enqueue(raffleId: bigint): boolean {
+    const key = raffleId.toString();
+    if (this.#data.settled.includes(key)) return false;
+    if (this.#data.queue.some((item) => item.raffleId === key)) return false;
+    this.#data.queue.push({ raffleId: key, enqueuedAt: Date.now(), attempts: 0, nextAttemptAt: 0 });
+    this.#scheduleFlush();
+    return true;
+  }
+
+  dueQueue(now: number = Date.now()): QueueItem[] {
+    return this.#data.queue.filter((item) => item.nextAttemptAt <= now);
+  }
+
+  queueSize(): number {
+    return this.#data.queue.length;
+  }
+
+  attemptsFor(raffleId: bigint): number {
+    return this.#data.queue.find((item) => item.raffleId === raffleId.toString())?.attempts ?? 0;
+  }
+
+  dequeue(raffleId: bigint): void {
+    const key = raffleId.toString();
+    this.#data.queue = this.#data.queue.filter((item) => item.raffleId !== key);
+    this.#scheduleFlush();
+  }
+
+  /** Record a failed settle attempt; returns the new attempt count. */
+  bumpAttempt(raffleId: bigint, error: string, delayMs: number): number {
+    const key = raffleId.toString();
+    const item = this.#data.queue.find((entry) => entry.raffleId === key);
+    if (!item) return 0;
+    item.attempts += 1;
+    item.lastError = error.slice(0, 300);
+    item.nextAttemptAt = Date.now() + delayMs;
+    this.#scheduleFlush();
+    return item.attempts;
+  }
+
+  /** Move a permanently-failing raffle out of the active queue (kept for audit). */
+  abandon(raffleId: bigint, reason: string): void {
+    const key = raffleId.toString();
+    this.dequeue(raffleId);
+    this.#data.abandoned.push({ raffleId: key, reason: reason.slice(0, 300), at: Date.now() });
+    if (this.#data.abandoned.length > MAX_ABANDONED) {
+      this.#data.abandoned.splice(0, this.#data.abandoned.length - MAX_ABANDONED);
+    }
+    this.#scheduleFlush();
+  }
+
+  abandonedCount(): number {
+    return this.#data.abandoned.length;
+  }
+
+  markSettled(raffleId: bigint): void {
+    const key = raffleId.toString();
+    this.#data.queue = this.#data.queue.filter((item) => item.raffleId !== key);
+    if (!this.#data.settled.includes(key)) {
+      this.#data.settled.push(key);
+      if (this.#data.settled.length > MAX_SETTLED_CACHE) {
+        this.#data.settled.splice(0, this.#data.settled.length - MAX_SETTLED_CACHE);
+      }
+    }
+    this.#scheduleFlush();
+  }
+
+  // ── Log scan cursor ───────────────────────────────────────────────────────
+
+  get lastScannedBlock(): bigint | null {
+    return this.#data.lastScannedBlock === null ? null : BigInt(this.#data.lastScannedBlock);
+  }
+
+  setScannedBlock(block: bigint): void {
+    this.#data.lastScannedBlock = block.toString();
+    this.#scheduleFlush();
+  }
+
+  // ── Salt registry (SaltStorage) ───────────────────────────────────────────
+
+  hasSalt(raffleId: string, salt: string): boolean {
+    return this.#data.salts[raffleId]?.includes(salt) ?? false;
+  }
+
+  rememberSalt(raffleId: string, salt: string): void {
+    const existing = this.#data.salts[raffleId] ?? [];
+    existing.push(salt);
+    if (existing.length > MAX_SALTS_PER_RAFFLE) {
+      existing.splice(0, existing.length - MAX_SALTS_PER_RAFFLE);
+    }
+    this.#data.salts[raffleId] = existing;
+    this.#scheduleFlush();
+  }
+
+  // ── Stats / persistence ───────────────────────────────────────────────────
+
+  stats(): Record<string, number> {
+    return {
+      queue: this.#data.queue.length,
+      settledCache: this.#data.settled.length,
+      abandoned: this.#data.abandoned.length,
+      trackedRafflesWithSalts: Object.keys(this.#data.salts).length,
+    };
+  }
+
+  #scheduleFlush(): void {
+    if (this.#closed || this.#flushTimer !== undefined) return;
+    this.#flushTimer = setTimeout(() => {
+      this.#flushTimer = undefined;
+      void this.flush().catch((error) => {
+        this.#logger.error('state flush failed', { error: error instanceof Error ? error.message : String(error) });
+      });
+    }, FLUSH_DEBOUNCE_MS);
+  }
+
+  async flush(): Promise<void> {
+    if (this.#flushTimer !== undefined) {
+      clearTimeout(this.#flushTimer);
+      this.#flushTimer = undefined;
+    }
+    const snapshot = JSON.stringify(this.#data);
+    this.#writeChain = this.#writeChain.then(async () => {
+      const tmp = `${this.#file}.tmp`;
+      await writeFile(tmp, snapshot, 'utf8');
+      await rename(tmp, this.#file);
+    });
+    return this.#writeChain;
+  }
+
+  async close(): Promise<void> {
+    this.#closed = true;
+    if (this.#flushTimer !== undefined) {
+      clearTimeout(this.#flushTimer);
+      this.#flushTimer = undefined;
+    }
+    await this.flush().catch(() => undefined);
+    await unlink(this.#lockFile).catch(() => undefined);
+  }
+}
+
+async function acquireLock(lockFile: string, logger: Logger): Promise<void> {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const handle = await openFile(lockFile, 'wx');
+      await handle.writeFile(JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString() }));
+      await handle.close();
+      return;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+      if (await isStaleLock(lockFile)) {
+        logger.warn('removing stale state lock', { lockFile });
+        await unlink(lockFile).catch(() => undefined);
+        continue;
+      }
+      throw new Error(
+        `another keeper instance holds the state lock (${lockFile}); ` +
+          'run a single instance per state file or remove the lock if the previous process died',
+      );
+    }
+  }
+  throw new Error(`could not acquire state lock ${lockFile}`);
+}
+
+async function isStaleLock(lockFile: string): Promise<boolean> {
+  try {
+    const raw = await readFile(lockFile, 'utf8');
+    const pid = Number((JSON.parse(raw) as { pid?: number }).pid);
+    if (!Number.isInteger(pid) || pid <= 0) return true;
+    try {
+      process.kill(pid, 0);
+      return false;
+    } catch (error) {
+      // EPERM = process exists but is owned by someone else -> still alive.
+      return (error as NodeJS.ErrnoException).code !== 'EPERM';
+    }
+  } catch {
+    return true;
+  }
+}

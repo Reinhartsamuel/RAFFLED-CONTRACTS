@@ -6,14 +6,29 @@ optimizer = true
 optimizer_runs = 1000
 via_ir = true
 solc_version = "0.8.28+commit.7893614a"
+# NOTE: evm_version intentionally left at the solc default (Cancun) rather than pinned to
+# "paris" — OpenZeppelin Contracts v5.5.0 (Strings/Bytes) unconditionally emits MCOPY, which
+# only exists from Cancun onward, so pinning "paris" fails to compile against the currently
+# vendored OZ version. Robinhood Chain's exact ArbOS/EVM feature level (PUSH0, MCOPY, TSTORE)
+# must still be confirmed before mainnet deploy — see "Open items" #3 in the migration plan.
+# If Robinhood Chain turns out to be pre-Cancun, either vendor an older OZ release or wait for
+# an ArbOS upgrade; do not deploy Cancun-only bytecode to a pre-Cancun chain.
 remappings = [
     "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
     "@chainlink/contracts/=lib/chainlink-brownie-contracts/contracts/",
     "chainlink/contracts/=lib/chainlink-brownie-contracts/contracts/",
+    "quiver/=lib/quiver-kit/src/",
 ]
 
 [fmt]
 single_line_statement_blocks = "preserve"
 
+[rpc_endpoints]
+base-sepolia = "https://sepolia.base.org"
+robinhood_testnet = "https://rpc.testnet.chain.robinhood.com"
+robinhood_mainnet = "https://rpc.mainnet.chain.robinhood.com"
+
 [etherscan]
 base-sepolia = { key = "${ETHERSCAN_API_KEY}", url = "https://api-sepolia.basescan.org/api" }
+robinhood_testnet = { key = "verifyContract", url = "https://explorer.testnet.chain.robinhood.com/api", chain = 46630 }
+robinhood_mainnet = { key = "verifyContract", url = "https://robinhoodchain.blockscout.com/api", chain = 4663 }

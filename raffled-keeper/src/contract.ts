@@ -1,0 +1,161 @@
+import { decodeEventLog, type Address, type Hex, type PublicClient, type TransactionReceipt } from 'viem';
+import { raffledQuiverAbi } from './abi.ts';
+import type { Logger } from './logger.ts';
+
+export interface ContractConstants {
+  maxResolveAttempts: number;
+  stallTimeout: bigint;
+  hardDeadline: bigint;
+  resolveGrace: bigint;
+}
+
+export interface RaffleView {
+  host: Address;
+  expiry: bigint;
+  status: number;
+  underfilled: boolean;
+  prizeType: number;
+  prizeAsset: Address;
+  ticketsSold: bigint;
+  prizeAmountOrTokenId: bigint;
+  ticketPrice: bigint;
+  maxCap: bigint;
+}
+
+export interface ResolutionStateView {
+  status: number;
+  attempts: number;
+  activeProviderAddr: Address;
+  activeSequence: bigint;
+  lastRequestedAt: bigint;
+  underfilled: boolean;
+  prizeDisposedFlag: boolean;
+}
+
+export interface SettleSummary {
+  winner?: Address;
+  eventNames: string[];
+  escrows: Record<string, unknown>[];
+}
+
+const DAY = 86_400n;
+const HOUR = 3_600n;
+
+/**
+ * The contract exposes MAX_RESOLVE_ATTEMPTS / STALL_TIMEOUT / HARD_DEADLINE /
+ * RESOLVE_GRACE as public constants. Read them once at startup (with safe
+ * fallbacks) so the keeper tracks the deployed values, not hardcoded ones.
+ */
+export async function readContractConstants(
+  publicClient: PublicClient,
+  contractAddress: Address,
+  logger?: Logger,
+): Promise<ContractConstants> {
+  const read = async (functionName: 'MAX_RESOLVE_ATTEMPTS' | 'STALL_TIMEOUT' | 'HARD_DEADLINE' | 'RESOLVE_GRACE') => {
+    try {
+      return (await publicClient.readContract({
+        address: contractAddress,
+        abi: raffledQuiverAbi,
+        functionName,
+      })) as bigint | number;
+    } catch (error) {
+      logger?.warn('could not read contract constant — using fallback', {
+        functionName,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return undefined;
+    }
+  };
+
+  const [attempts, stall, hard, grace] = await Promise.all([
+    read('MAX_RESOLVE_ATTEMPTS'),
+    read('STALL_TIMEOUT'),
+    read('HARD_DEADLINE'),
+    read('RESOLVE_GRACE'),
+  ]);
+
+  return {
+    maxResolveAttempts: attempts !== undefined ? Number(attempts) : 3,
+    stallTimeout: stall !== undefined ? BigInt(stall) : 6n * HOUR,
+    hardDeadline: hard !== undefined ? BigInt(hard) : 7n * DAY,
+    resolveGrace: grace !== undefined ? BigInt(grace) : 72n * HOUR,
+  };
+}
+
+export async function getRaffleView(
+  publicClient: PublicClient,
+  contractAddress: Address,
+  raffleId: bigint,
+): Promise<RaffleView> {
+  const raffle = (await publicClient.readContract({
+    address: contractAddress,
+    abi: raffledQuiverAbi,
+    functionName: 'getRaffle',
+    args: [raffleId],
+  })) as unknown as RaffleView;
+  return raffle;
+}
+
+export async function getResolutionStateView(
+  publicClient: PublicClient,
+  contractAddress: Address,
+  raffleId: bigint,
+): Promise<ResolutionStateView> {
+  const state = (await publicClient.readContract({
+    address: contractAddress,
+    abi: raffledQuiverAbi,
+    functionName: 'getResolutionState',
+    args: [raffleId],
+  })) as unknown as ResolutionStateView;
+  return state;
+}
+
+/** True when the receipt contains the given RaffledQuiver event. */
+export function receiptHasContractEvent(receipt: TransactionReceipt, eventName: string): boolean {
+  return decodeReceiptEvents(receipt).some((decoded) => decoded.eventName === eventName);
+}
+
+interface DecodedLog {
+  eventName: string;
+  args: Record<string, unknown>;
+}
+
+function decodeReceiptEvents(receipt: TransactionReceipt): DecodedLog[] {
+  const decodedLogs: DecodedLog[] = [];
+  for (const log of receipt.logs) {
+    if (log.address.toLowerCase() !== receipt.to?.toLowerCase()) continue;
+    try {
+      const decoded = decodeEventLog({
+        abi: raffledQuiverAbi,
+        data: log.data as Hex,
+        topics: log.topics as [Hex, ...Hex[]],
+      });
+      decodedLogs.push({
+        eventName: decoded.eventName,
+        args: (decoded.args ?? {}) as Record<string, unknown>,
+      });
+    } catch {
+      // Not one of ours / undecodable — ignore.
+    }
+  }
+  return decodedLogs;
+}
+
+/**
+ * Post-settle receipt audit: winner, distribution events and any push-with-
+ * escrow fallbacks (PayoutEscrowed / NftEscrowed) that require the recipient to
+ * pull-claim. A raffle with escrows is still COMPLETED on-chain — never retry.
+ */
+export function summarizeSettlementReceipt(receipt: TransactionReceipt): SettleSummary {
+  const summary: SettleSummary = { eventNames: [], escrows: [] };
+  for (const { eventName, args } of decodeReceiptEvents(receipt)) {
+    summary.eventNames.push(eventName);
+    if (eventName === 'WinnerPicked' && typeof args.winner === 'string') {
+      summary.winner = args.winner as Address;
+    }
+    if (eventName === 'PayoutEscrowed' || eventName === 'NftEscrowed') {
+      summary.escrows.push(args);
+    }
+  }
+  return summary;
+}
