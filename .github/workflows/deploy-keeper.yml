@@ -36,7 +36,7 @@ jobs:
             pm2 delete raffled-keeper || true
             : > ~/.pm2/logs/raffled-keeper-out.log || true
             : > ~/.pm2/logs/raffled-keeper-error.log || true
-            pm2 start npm --name raffled-keeper -- run start:dist
+            pm2 start ecosystem.config.cjs
             pm2 save
             echo "pm2 saved"
             echo "Waiting for keeper startup..."
