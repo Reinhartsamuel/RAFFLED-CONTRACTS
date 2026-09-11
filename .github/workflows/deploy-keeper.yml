@@ -34,15 +34,27 @@ jobs:
             npm ci
             npm run build
             pm2 delete raffled-keeper || true
-            : > ~/.pm2/logs/raffled-keeper-out.log || true
-            : > ~/.pm2/logs/raffled-keeper-error.log || true
+            pm2 flush raffled-keeper || pm2 flush || true
             pm2 start ecosystem.config.cjs
             pm2 save
             echo "pm2 saved"
             echo "Waiting for keeper startup..."
             for i in $(seq 1 30); do
-              if grep -q "raffled-keeper started" ~/.pm2/logs/raffled-keeper-out.log 2>/dev/null; then
+              # pm2 suffixes log files with the process id (raffled-keeper-out-5.log),
+              # so resolve the newest matching files instead of assuming a name.
+              OUT_LOG="$(ls -t "$HOME"/.pm2/logs/raffled-keeper-out*.log 2>/dev/null | head -n 1)"
+              ERR_LOG="$(ls -t "$HOME"/.pm2/logs/raffled-keeper-error*.log 2>/dev/null | head -n 1)"
+              LOGS=""
+              if [ -n "$OUT_LOG" ]; then LOGS="$OUT_LOG"; fi
+              if [ -n "$ERR_LOG" ]; then LOGS="$LOGS $ERR_LOG"; fi
+              if [ -n "$OUT_LOG" ] && grep -q "raffled-keeper started" "$OUT_LOG" 2>/dev/null; then
                 echo "Keeper is up."
+                break
+              fi
+              # Alchemy being over its usage/quota limit is transient: the keeper
+              # waits and retries in-process, so the deploy should not fail here.
+              if [ -n "$LOGS" ] && grep -qiE "RPC unavailable|compute unit|capacity|quota|rate limit|too many requests|429|usage limit" $LOGS 2>/dev/null; then
+                echo "Keeper is waiting on the RPC provider (Alchemy usage/quota limit). Deploy is OK; it will retry automatically."
                 break
               fi
               if [ "$i" -eq 30 ]; then

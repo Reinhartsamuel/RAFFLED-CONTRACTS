@@ -1,15 +1,44 @@
 import { raffledQuiverAbi } from './abi.ts';
 import { createAlerter } from './alerts.ts';
 import { createPublicContext, createWalletContext } from './chain.ts';
-import { ConfigError, loadConfig } from './config.ts';
+import { ConfigError, loadConfig, type KeeperConfig } from './config.ts';
 import { readContractConstants } from './contract.ts';
+import { isTransientError, sleep } from './errors.ts';
 import { ResolveJob } from './jobs/resolve.ts';
 import { SettleJob } from './jobs/settle.ts';
-import { createLogger } from './logger.ts';
+import { createLogger, type Logger } from './logger.ts';
 import { SaltGenerator } from './salt.ts';
 import { Scheduler, type JobDefinition } from './scheduler.ts';
 import { StateStore } from './state.ts';
 import { createTxSender } from './tx.ts';
+
+/**
+ * Block startup until the RPC answers. When the provider is over its usage /
+ * quota (429, compute-unit capacity) or momentarily unreachable, restarting the
+ * process immediately would only burn more of the quota, so retry with
+ * exponential backoff in-process instead of exiting for PM2 to restart.
+ * Non-transient errors (bad URL, wrong contract) still fail fast.
+ */
+async function waitForRpc(cfg: KeeperConfig, logger: Logger): Promise<void> {
+  let delayMs = 5_000;
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      const { publicClient, chainId } = await createPublicContext(cfg);
+      await publicClient.getBlockNumber();
+      if (attempt > 1) logger.info('RPC reachable again — continuing keeper startup', { attempt, chainId });
+      return;
+    } catch (error) {
+      if (!isTransientError(error)) throw error;
+      logger.warn('RPC unavailable (quota/rate limit/network) — waiting before startup retry', {
+        attempt,
+        retryInMs: delayMs,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      await sleep(delayMs);
+      delayMs = Math.min(delayMs * 2, 5 * 60_000);
+    }
+  }
+}
 
 async function main(): Promise<void> {
   let cfg;
@@ -30,6 +59,7 @@ async function main(): Promise<void> {
   let scheduler: Scheduler | undefined;
 
   try {
+    await waitForRpc(cfg, logger);
     const { chain, chainId, publicClient } = await createPublicContext(cfg);
     if (cfg.chainId !== undefined && cfg.chainId !== chainId) {
       throw new Error(

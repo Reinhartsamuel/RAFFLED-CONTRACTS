@@ -28,6 +28,16 @@ test('applies documented defaults', () => {
   assert.equal(cfg.chainId, undefined);
   assert.equal(cfg.logLevel, 'info');
   assert.equal(cfg.stateFile, './data/keeper-state.json');
+  assert.equal(cfg.logChunkSize, 5_000n);
+  assert.equal(cfg.logChunkSizeExplicit, false);
+  assert.equal(cfg.logMaxRequestsPerCycle, 500);
+});
+
+test('an explicit log chunk size is marked as an override', () => {
+  const cfg = loadConfig(baseEnv({ RAFFLE_LOG_CHUNK_SIZE: '10', RAFFLE_LOG_MAX_REQUESTS_PER_CYCLE: '250' }), []);
+  assert.equal(cfg.logChunkSize, 10n);
+  assert.equal(cfg.logChunkSizeExplicit, true);
+  assert.equal(cfg.logMaxRequestsPerCycle, 250);
 });
 
 test('reports every missing required variable at once', () => {

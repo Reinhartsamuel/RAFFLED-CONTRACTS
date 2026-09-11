@@ -2,11 +2,19 @@ import type { PublicClient } from 'viem';
 import { randomnessFulfilledEvent } from '../abi.ts';
 import type { Alerter } from '../alerts.ts';
 import type { KeeperConfig } from '../config.ts';
-import { getRaffleView, summarizeSettlementReceipt } from '../contract.ts';
+import { getRaffleCount, getRaffleView, summarizeSettlementReceipt } from '../contract.ts';
 import type { Logger } from '../logger.ts';
+import { scanLogsAdaptive } from '../logs.ts';
 import type { StateStore } from '../state.ts';
 import type { TxSender } from '../tx.ts';
 import { RaffleStatus, raffleStatusName } from '../types.ts';
+
+interface ScanReport {
+  logsSeen: number;
+  enqueued: number;
+  requests: number;
+  budgetExhausted: boolean;
+}
 
 export interface SettleJobDeps {
   cfg: KeeperConfig;
@@ -49,7 +57,18 @@ export class SettleJob {
 
   async run(): Promise<void> {
     const startedAt = Date.now();
-    const scanned = await this.#scanFulfilledLogs();
+    let scanned: ScanReport = { logsSeen: 0, enqueued: 0, requests: 0, budgetExhausted: false };
+    try {
+      scanned = await this.#scanFulfilledLogs();
+    } catch (error) {
+      // A failed scan (RPC down, unsupported range, quota error) must not stop
+      // the queue from draining. The cursor is checkpointed per chunk, so the
+      // next cycle resumes where this one stopped instead of replaying the
+      // whole window.
+      this.#logger.error('fulfilled-log scan failed — processing existing queue only', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
     const settled = await this.#processQueue();
     this.#logger.info('settle cycle complete', {
       ...scanned,
@@ -61,7 +80,7 @@ export class SettleJob {
 
   // ── Step 1: RandomnessFulfilled -> queue ──────────────────────────────────
 
-  async #scanFulfilledLogs(): Promise<{ logsSeen: number; enqueued: number }> {
+  async #scanFulfilledLogs(): Promise<ScanReport> {
     const latest = await this.#publicClient.getBlockNumber();
     let from: bigint;
 
@@ -71,6 +90,19 @@ export class SettleJob {
       from = this.#cfg.startBlock;
       this.#logger.info('first run: scanning from RAFFLE_START_BLOCK', { fromBlock: from.toString() });
     } else {
+      // On a fresh deployment there is nothing to settle until the contract has
+      // at least one raffle; skip the (large, costly) empty lookback scan and
+      // start at head.
+      const raffleCount = await getRaffleCount(this.#publicClient, this.#cfg.contractAddress).catch(() => undefined);
+      if (raffleCount === 0n) {
+        this.#state.setScannedBlock(latest);
+        await this.#state.flush();
+        this.#logger.info('first run: contract has no raffles yet — scan cursor starts at head', {
+          block: latest.toString(),
+        });
+        return { logsSeen: 0, enqueued: 0, requests: 0, budgetExhausted: false };
+      }
+
       from = latest > this.#cfg.logLookbackBlocks ? latest - this.#cfg.logLookbackBlocks : 0n;
       this.#logger.info('first run: scanning recent blocks for fulfilled-but-unsettled raffles', {
         fromBlock: from.toString(),
@@ -78,33 +110,62 @@ export class SettleJob {
       });
     }
 
-    if (from > latest) return { logsSeen: 0, enqueued: 0 };
+    if (from > latest) return { logsSeen: 0, enqueued: 0, requests: 0, budgetExhausted: false };
 
-    let logsSeen = 0;
+    // Prefer the smallest learned chunk size so a provider with a narrow
+    // eth_getLogs cap is never asked for an oversized range again. An explicit
+    // RAFFLE_LOG_CHUNK_SIZE always wins (reset after switching providers).
+    const configured = this.#cfg.logChunkSize;
+    const learned = this.#state.learnedLogChunkSize;
+    const chunkSize =
+      this.#cfg.logChunkSizeExplicit || learned === null ? configured : learned < configured ? learned : configured;
+
     let enqueued = 0;
-    for (let start = from; start <= latest; start += this.#cfg.logChunkSize) {
-      const end = start + this.#cfg.logChunkSize - 1n > latest ? latest : start + this.#cfg.logChunkSize - 1n;
-      const logs = await this.#publicClient.getLogs({
-        address: this.#cfg.contractAddress,
-        event: randomnessFulfilledEvent,
-        fromBlock: start,
-        toBlock: end,
-      });
-      logsSeen += logs.length;
-      for (const log of logs) {
-        if (log.args.raffleId === undefined) continue;
-        if (this.#state.enqueue(log.args.raffleId)) {
-          enqueued += 1;
-          this.#logger.info('enqueued fulfilled raffle for settlement', { raffleId: log.args.raffleId.toString() });
+    const result = await scanLogsAdaptive({
+      fromBlock: from,
+      toBlock: latest,
+      chunkSize,
+      maxRequests: this.#cfg.logMaxRequestsPerCycle,
+      logger: this.#logger,
+      fetchChunk: (fromBlock, toBlock) =>
+        this.#publicClient.getLogs({
+          address: this.#cfg.contractAddress,
+          event: randomnessFulfilledEvent,
+          fromBlock,
+          toBlock,
+        }),
+      onLogs: async (logs) => {
+        for (const log of logs) {
+          if (log.args.raffleId === undefined) continue;
+          if (this.#state.enqueue(log.args.raffleId)) {
+            enqueued += 1;
+            this.#logger.info('enqueued fulfilled raffle for settlement', { raffleId: log.args.raffleId.toString() });
+          }
         }
-      }
-      // Persist per chunk: a crash mid-scan resumes after the last chunk
-      // instead of replaying the whole window.
-      this.#state.setScannedBlock(end);
-      await this.#state.flush();
+      },
+      // Persist per chunk: a crash (or the per-cycle budget) resumes after the
+      // last successful chunk instead of replaying the whole window.
+      onCheckpoint: async (lastScannedBlock, effectiveChunkSize) => {
+        this.#state.setScannedBlock(lastScannedBlock);
+        this.#state.setLearnedLogChunkSize(effectiveChunkSize);
+        await this.#state.flush();
+      },
+    });
+
+    if (result.budgetExhausted) {
+      this.#logger.info('fulfilled-log scan request budget reached — will resume next cycle', {
+        requests: result.requests,
+        lastScannedBlock: result.lastScannedBlock?.toString() ?? null,
+        latestBlock: latest.toString(),
+      });
     }
 
-    return { logsSeen, enqueued };
+    return {
+      logsSeen: result.logsSeen,
+      enqueued,
+      requests: result.requests,
+      budgetExhausted: result.budgetExhausted,
+    };
   }
 
   // ── Step 2: queue -> settle() ─────────────────────────────────────────────

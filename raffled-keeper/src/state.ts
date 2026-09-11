@@ -26,6 +26,8 @@ export interface AbandonedItem {
 interface PersistedState {
   version: number;
   lastScannedBlock: string | null;
+  /** Effective eth_getLogs chunk size learned from the provider's range cap. */
+  logChunkSize: string | null;
   queue: QueueItem[];
   settled: string[];
   abandoned: AbandonedItem[];
@@ -36,6 +38,7 @@ function emptyState(): PersistedState {
   return {
     version: STATE_VERSION,
     lastScannedBlock: null,
+    logChunkSize: null,
     queue: [],
     settled: [],
     abandoned: [],
@@ -81,6 +84,7 @@ export class StateStore implements SaltStorage {
         data = {
           version: STATE_VERSION,
           lastScannedBlock: parsed.lastScannedBlock ?? null,
+          logChunkSize: typeof parsed.logChunkSize === 'string' ? parsed.logChunkSize : null,
           queue: Array.isArray(parsed.queue) ? parsed.queue : [],
           settled: Array.isArray(parsed.settled) ? parsed.settled : [],
           abandoned: Array.isArray(parsed.abandoned) ? parsed.abandoned : [],
@@ -182,6 +186,21 @@ export class StateStore implements SaltStorage {
 
   setScannedBlock(block: bigint): void {
     this.#data.lastScannedBlock = block.toString();
+    this.#scheduleFlush();
+  }
+
+  /**
+   * Effective chunk size learned from the RPC provider's eth_getLogs range cap.
+   * Persisted so the keeper does not have to rediscover (and burn requests on)
+   * the cap after every restart. Null until the first successful scan.
+   */
+  get learnedLogChunkSize(): bigint | null {
+    return this.#data.logChunkSize === null ? null : BigInt(this.#data.logChunkSize);
+  }
+
+  setLearnedLogChunkSize(size: bigint): void {
+    if (this.#data.logChunkSize === size.toString()) return;
+    this.#data.logChunkSize = size.toString();
     this.#scheduleFlush();
   }
 

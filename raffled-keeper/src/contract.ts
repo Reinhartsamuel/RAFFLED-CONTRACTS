@@ -82,6 +82,14 @@ export async function readContractConstants(
   };
 }
 
+export async function getRaffleCount(publicClient: PublicClient, contractAddress: Address): Promise<bigint> {
+  return (await publicClient.readContract({
+    address: contractAddress,
+    abi: raffledQuiverAbi,
+    functionName: 'raffleCount',
+  })) as bigint;
+}
+
 export async function getRaffleView(
   publicClient: PublicClient,
   contractAddress: Address,

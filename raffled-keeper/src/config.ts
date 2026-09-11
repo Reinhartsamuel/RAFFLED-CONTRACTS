@@ -27,6 +27,8 @@ export interface KeeperConfig {
   readonly settleMaxAttempts: number;
   readonly logLookbackBlocks: bigint;
   readonly logChunkSize: bigint;
+  readonly logChunkSizeExplicit: boolean;
+  readonly logMaxRequestsPerCycle: number;
   readonly startBlock?: bigint;
   readonly feeFundThresholdWei?: bigint;
   readonly feeFundTargetWei?: bigint;
@@ -232,6 +234,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, argv: readonly 
     settleMaxAttempts: int('RAFFLE_SETTLE_MAX_ATTEMPTS', 5, 1, 100),
     logLookbackBlocks: bigint('RAFFLE_LOG_LOOKBACK_BLOCKS', 10_000n, 0n),
     logChunkSize: bigint('RAFFLE_LOG_CHUNK_SIZE', 5_000n, 1n),
+    logChunkSizeExplicit: raw('RAFFLE_LOG_CHUNK_SIZE') !== undefined,
+    logMaxRequestsPerCycle: int('RAFFLE_LOG_MAX_REQUESTS_PER_CYCLE', 500, 1, 1_000_000),
     startBlock: optionalBigint('RAFFLE_START_BLOCK', 0n),
     feeFundThresholdWei: optionalBigint('RAFFLE_FEE_FUND_THRESHOLD', 0n),
     feeFundTargetWei: optionalBigint('RAFFLE_FEE_FUND_TARGET', 0n),

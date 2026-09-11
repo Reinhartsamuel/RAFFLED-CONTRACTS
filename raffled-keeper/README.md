@@ -114,7 +114,8 @@ All config is env-driven; see `.env.example` for the full annotated list.
 | `RAFFLE_CANCEL_EXPIRED_AFTER_GRACE` | no | `false` | After `expiry + RESOLVE_GRACE` (72 h), cancel OPEN raffles whose on-chain request keeps failing (`RandomnessRequestFailed`) so entrants can `claimRefund`. |
 | `RAFFLE_LOG_LOOKBACK_BLOCKS` | no | `10000` | First-run lookback for `RandomnessFulfilled`. |
 | `RAFFLE_START_BLOCK` | no | — | Absolute first block to scan (deploy block). |
-| `RAFFLE_LOG_CHUNK_SIZE` | no | `5000` | `eth_getLogs` chunking. |
+| `RAFFLE_LOG_CHUNK_SIZE` | no | `5000` | `eth_getLogs` chunking. Auto-shrinks to the provider's cap and is remembered; set explicitly to reset the learned size. |
+| `RAFFLE_LOG_MAX_REQUESTS_PER_CYCLE` | no | `500` | Cap on `eth_getLogs` calls per settle cycle; the scan cursor resumes next cycle. |
 | `RAFFLE_SETTLE_MAX_ATTEMPTS` | no | `5` | Drop + alert after this many failed settles. |
 | `RAFFLE_FEE_FUND_THRESHOLD` | no | disabled | Auto top-up the contract balance below this (wei). |
 | `RAFFLE_FEE_FUND_TARGET` | no | `fee × batch` | Top-up target (wei). |
@@ -158,9 +159,14 @@ There is no on-chain view for “RESOLVED and un-settled”, so the queue is der
 
 1. **Scan** — `eth_getLogs` for `RandomnessFulfilled` from the persisted cursor
    (`RAFFLE_START_BLOCK` or a `RAFFLE_LOG_LOOKBACK_BLOCKS` lookback on first run),
-   chunked by `RAFFLE_LOG_CHUNK_SIZE`; each chunk is persisted, so a crash resumes
-   where it stopped. The lookback catches fulfilled-but-unsettled raffles from
-   before the keeper started.
+   chunked by `RAFFLE_LOG_CHUNK_SIZE`. Managed RPCs cap the block span of one
+   `eth_getLogs` call (Alchemy's free tier allows only 10 blocks), so the scanner
+   reads the provider's error, shrinks the chunk to the allowed range and retries
+   the same span instead of failing the whole scan; the working size is persisted
+   in the state file and reused on later cycles/restarts. Each chunk is
+   checkpointed, so a crash or the `RAFFLE_LOG_MAX_REQUESTS_PER_CYCLE` budget
+   resumes where it stopped rather than replaying the window. On a contract that
+   has no raffles yet, the first run skips the lookback and starts at head.
 2. **Settle** — for each due queue item, `getRaffle(id)` is the source of truth:
    - `RESOLVED` → `settle(id)` (permissionless; any relayer could do it)
    - `PENDING_VRF` → the log was reorged away; drop (the resolve sweep handles the stall)
@@ -194,6 +200,11 @@ checks drop already-completed raffles.
 | `PayoutEscrowed` / `NftEscrowed` on `settle` | alert, mark settled, do **not** retry |
 | Nonce / RPC / timeout errors | exponential backoff retry per tx, then cross-cycle backoff; dropped after `RAFFLE_SETTLE_MAX_ATTEMPTS` + alert |
 | One raffle throws | caught, logged, the sweep continues with the next raffle |
+| `eth_getLogs` span rejected by RPC | chunk auto-shrinks to the provider's cap and is remembered in the state file; the same span is retried |
+| Fulfilled-log scan fails | logged; the existing queue still drains and the next cycle resumes from the persisted cursor |
+| First run, contract has no raffles | skip the lookback scan and start the cursor at head |
+| RPC over quota / rate-limited at startup | keeper waits with exponential backoff in-process instead of exiting, so PM2 does not crash-loop and the deploy does not fail |
+| RPC over quota during a cycle | logged; the next cycle retries, and the scan cursor resumes where it stopped |
 
 Loud alerts (log + optional webhook, rate-limited per key): not-allowlisted key,
 insufficient fee balance, failed top-up, low keeper gas, escrowed payouts, abandoned
@@ -297,6 +308,7 @@ raffled-keeper/
 │   ├── tx.ts                # send + confirm + retry/backoff + receipt-revert decoding
 │   ├── salt.ts              # 32-byte CSPRNG salt generator, per-raffle uniqueness
 │   ├── state.ts             # pid-locked JSON state: queue, cursor, salts, settled ring
+│   ├── logs.ts              # adaptive/resumable eth_getLogs range scanner
 │   ├── pagination.ts        # cursor-loop driver with runaway guards
 │   ├── contract.ts          # views, constants, receipt event summary
 │   └── jobs/
