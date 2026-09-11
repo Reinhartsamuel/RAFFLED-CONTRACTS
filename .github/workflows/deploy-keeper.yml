@@ -55,4 +55,4 @@ jobs:
             echo "Keeper process status:"
             pm2 describe raffled-keeper | grep -E "status|uptime|restarts" || true
             echo "Recent keeper logs:"
-            pm2 logs raffled-keeper --lines 20 --nostream
+            pm2 logs raffled-keeper --lines 20 --nostream 
