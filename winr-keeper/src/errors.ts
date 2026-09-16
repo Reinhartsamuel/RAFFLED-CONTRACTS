@@ -1,8 +1,8 @@
 import { BaseError, ContractFunctionRevertedError, decodeErrorResult } from 'viem';
-import { raffledQuiverAbi } from './abi.ts';
+import { winrCoreAbi } from './abi.ts';
 
 export interface DecodedError {
-  /** Custom error name when the revert decoded against the RaffledQuiver ABI. */
+  /** Custom error name when the revert decoded against the WinrCore ABI. */
   name?: string;
   /** Decoded error args (e.g. [required, available] for InsufficientFeeBalance). */
   args?: readonly unknown[];
@@ -33,7 +33,7 @@ export function decodeError(error: unknown): DecodedError {
       const raw = (revert as unknown as { raw?: `0x${string}` }).raw;
       if (raw) {
         try {
-          const decoded = decodeErrorResult({ abi: raffledQuiverAbi, data: raw });
+          const decoded = decodeErrorResult({ abi: winrCoreAbi, data: raw });
           return {
             name: decoded.errorName,
             args: decoded.args as readonly unknown[] | undefined,

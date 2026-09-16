@@ -1,5 +1,5 @@
 import { decodeEventLog, type Address, type Hex, type PublicClient, type TransactionReceipt } from 'viem';
-import { raffledQuiverAbi } from './abi.ts';
+import { winrCoreAbi } from './abi.ts';
 import type { Logger } from './logger.ts';
 
 export interface ContractConstants {
@@ -55,7 +55,7 @@ export async function readContractConstants(
     try {
       return (await publicClient.readContract({
         address: contractAddress,
-        abi: raffledQuiverAbi,
+        abi: winrCoreAbi,
         functionName,
       })) as bigint | number;
     } catch (error) {
@@ -85,7 +85,7 @@ export async function readContractConstants(
 export async function getRaffleCount(publicClient: PublicClient, contractAddress: Address): Promise<bigint> {
   return (await publicClient.readContract({
     address: contractAddress,
-    abi: raffledQuiverAbi,
+    abi: winrCoreAbi,
     functionName: 'raffleCount',
   })) as bigint;
 }
@@ -97,7 +97,7 @@ export async function getRaffleView(
 ): Promise<RaffleView> {
   const raffle = (await publicClient.readContract({
     address: contractAddress,
-    abi: raffledQuiverAbi,
+    abi: winrCoreAbi,
     functionName: 'getRaffle',
     args: [raffleId],
   })) as unknown as RaffleView;
@@ -111,14 +111,14 @@ export async function getResolutionStateView(
 ): Promise<ResolutionStateView> {
   const state = (await publicClient.readContract({
     address: contractAddress,
-    abi: raffledQuiverAbi,
+    abi: winrCoreAbi,
     functionName: 'getResolutionState',
     args: [raffleId],
   })) as unknown as ResolutionStateView;
   return state;
 }
 
-/** True when the receipt contains the given RaffledQuiver event. */
+/** True when the receipt contains the given WinrCore event. */
 export function receiptHasContractEvent(receipt: TransactionReceipt, eventName: string): boolean {
   return decodeReceiptEvents(receipt).some((decoded) => decoded.eventName === eventName);
 }
@@ -134,7 +134,7 @@ function decodeReceiptEvents(receipt: TransactionReceipt): DecodedLog[] {
     if (log.address.toLowerCase() !== receipt.to?.toLowerCase()) continue;
     try {
       const decoded = decodeEventLog({
-        abi: raffledQuiverAbi,
+        abi: winrCoreAbi,
         data: log.data as Hex,
         topics: log.topics as [Hex, ...Hex[]],
       });

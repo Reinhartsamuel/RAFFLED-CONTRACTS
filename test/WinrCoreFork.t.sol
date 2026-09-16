@@ -2,15 +2,15 @@
 pragma solidity ^0.8.24;
 
 import {Test} from "forge-std/Test.sol";
-import {RaffledQuiver} from "../src/RaffledQuiver.sol";
+import {WinrCore} from "../src/WinrCore.sol";
 import {StandardERC20} from "./mocks/StandardERC20.sol";
 
 /// @notice OPT-IN fork smoke test against the live Quiver coordinator on Robinhood testnet.
 ///         Not run in CI by default - set `ROBINHOOD_TESTNET_RPC` to enable. Every test
 ///         verifies the real coordinator ABI (fee quote, provider record, sequence counter,
-///         commitment helper) that RaffledQuiver's resolver path relies on. It never submits
+///         commitment helper) that WinrCore's resolver path relies on. It never submits
 ///         a real randomness request (that would consume a provider hash-chain link).
-contract RaffledQuiverForkTest is Test {
+contract WinrCoreForkTest is Test {
     address internal constant TESTNET_COORDINATOR = 0x1da30d6465f657F11B4D7F6Db0B16aD79152fb40;
     address internal constant TESTNET_PROVIDER = 0xc84CC91131b63d9BECFDe7b2DB3D0C653B690541;
 
@@ -58,11 +58,11 @@ contract RaffledQuiverForkTest is Test {
         assertEq(onChain, keccak256(abi.encodePacked(userRandom)));
     }
 
-    function test_Fork_DeployRaffledQuiverWithLiveConstants() external forkOrSkip {
+    function test_Fork_DeployWinrCoreWithLiveConstants() external forkOrSkip {
         // Smoke-deploy a manager bound to the live coordinator/provider to prove the
         // constructor + view stack decodes against the real ABI (no state changing calls).
         StandardERC20 usdcLike = new StandardERC20("USDC", "USDC", 1e18);
-        RaffledQuiver mgr = new RaffledQuiver({
+        WinrCore mgr = new WinrCore({
             _quiver: TESTNET_COORDINATOR,
             _provider: TESTNET_PROVIDER,
             _fallbackProvider: address(0),

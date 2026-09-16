@@ -1,10 +1,10 @@
-# Raffled Contract
+# Winr Contract
 
 A gas-optimized, decentralized raffle management system built with Foundry, OpenZeppelin, and Chainlink VRF v2.5 for provably fair randomness.
 
 ## Overview
 
-**Raffled** is a production-ready smart contract platform that enables anyone to create and manage trustless raffles on EVM-compatible blockchains. The system leverages Chainlink's decentralized oracle network for:
+**Winr** is a production-ready smart contract platform that enables anyone to create and manage trustless raffles on EVM-compatible blockchains. The system leverages Chainlink's decentralized oracle network for:
 - **Chainlink VRF v2.5**: Verifiable on-chain randomness for winner selection
 - **Chainlink Automation**: Automated raffle expiry detection and execution
 

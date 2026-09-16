@@ -1,11 +1,11 @@
 import { parseAbiItem } from 'viem';
 
 /**
- * Trimmed RaffledQuiver ABI — only what the keeper reads, calls and decodes.
+ * Trimmed WinrCore ABI — only what the keeper reads, calls and decodes.
  * Errors are included so viem decodes custom reverts (NotResolver,
  * InsufficientFeeBalance, ...) into `errorName`/`args` instead of raw bytes.
  */
-export const raffledQuiverAbi = [
+export const winrCoreAbi = [
   // ── Keeper helper views ──────────────────────────────────────────────────
   {
     inputs: [
@@ -41,16 +41,16 @@ export const raffledQuiverAbi = [
         components: [
           { internalType: 'address', name: 'host', type: 'address' },
           { internalType: 'uint48', name: 'expiry', type: 'uint48' },
-          { internalType: 'enum RaffledQuiver.RaffleStatus', name: 'status', type: 'uint8' },
+          { internalType: 'enum WinrCore.RaffleStatus', name: 'status', type: 'uint8' },
           { internalType: 'bool', name: 'underfilled', type: 'bool' },
-          { internalType: 'enum RaffledQuiver.PrizeType', name: 'prizeType', type: 'uint8' },
+          { internalType: 'enum WinrCore.PrizeType', name: 'prizeType', type: 'uint8' },
           { internalType: 'address', name: 'prizeAsset', type: 'address' },
           { internalType: 'uint96', name: 'ticketsSold', type: 'uint96' },
           { internalType: 'uint256', name: 'prizeAmountOrTokenId', type: 'uint256' },
           { internalType: 'uint256', name: 'ticketPrice', type: 'uint256' },
           { internalType: 'uint256', name: 'maxCap', type: 'uint256' },
         ],
-        internalType: 'struct RaffledQuiver.RaffleData',
+        internalType: 'struct WinrCore.RaffleData',
         name: '',
         type: 'tuple',
       },
@@ -64,7 +64,7 @@ export const raffledQuiverAbi = [
     outputs: [
       {
         components: [
-          { internalType: 'enum RaffledQuiver.RaffleStatus', name: 'status', type: 'uint8' },
+          { internalType: 'enum WinrCore.RaffleStatus', name: 'status', type: 'uint8' },
           { internalType: 'uint8', name: 'attempts', type: 'uint8' },
           { internalType: 'address', name: 'activeProviderAddr', type: 'address' },
           { internalType: 'uint64', name: 'activeSequence', type: 'uint64' },
@@ -72,7 +72,7 @@ export const raffledQuiverAbi = [
           { internalType: 'bool', name: 'underfilled', type: 'bool' },
           { internalType: 'bool', name: 'prizeDisposedFlag', type: 'bool' },
         ],
-        internalType: 'struct RaffledQuiver.ResolutionState',
+        internalType: 'struct WinrCore.ResolutionState',
         name: '',
         type: 'tuple',
       },

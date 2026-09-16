@@ -1,5 +1,5 @@
 import type { PublicClient } from 'viem';
-import { raffledQuiverAbi } from '../abi.ts';
+import { winrCoreAbi } from '../abi.ts';
 import type { Alerter } from '../alerts.ts';
 import type { KeeperConfig } from '../config.ts';
 import {
@@ -111,7 +111,7 @@ export class ResolveJob {
   async #readRandomnessFee(): Promise<bigint> {
     return (await this.#publicClient.readContract({
       address: this.#cfg.contractAddress,
-      abi: raffledQuiverAbi,
+      abi: winrCoreAbi,
       functionName: 'randomnessFee',
     })) as bigint;
   }
@@ -182,7 +182,7 @@ export class ResolveJob {
       async (cursor, limit) => {
         const [ids, nextCursor] = (await this.#publicClient.readContract({
           address: this.#cfg.contractAddress,
-          abi: raffledQuiverAbi,
+          abi: winrCoreAbi,
           functionName: 'pendingResolution',
           args: [cursor, limit],
         })) as readonly [readonly bigint[], bigint];
@@ -217,7 +217,7 @@ export class ResolveJob {
       if (result.kind === 'ok') {
         report.resolveSent += 1;
         if (receiptHasContractEvent(result.receipt, 'RandomnessRequestFailed')) {
-          // The tx landed but RaffledQuiver's try/catch around QUIVER.getFee
+          // The tx landed but WinrCore's try/catch around QUIVER.getFee
           // swallowed a provider-side failure: the raffle is still OPEN and
           // will be retried next cycle (or cancelled once grace elapsed).
           this.#logger.warn('resolve tx mined but the Quiver request failed on-chain — will retry', {
@@ -341,7 +341,7 @@ export class ResolveJob {
       async (cursor, limit) => {
         const [ids, nextCursor] = (await this.#publicClient.readContract({
           address: this.#cfg.contractAddress,
-          abi: raffledQuiverAbi,
+          abi: winrCoreAbi,
           functionName: 'stalledRaffles',
           args: [cursor, limit],
         })) as readonly [readonly bigint[], bigint];

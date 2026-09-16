@@ -1,6 +1,6 @@
-# raffled-keeper
+# winr-keeper
 
-Keeper service for **`RaffledQuiver`** (Quiver VRF push/callback flow, Robinhood Chain).
+Keeper service for **`WinrCore`** (Quiver VRF push/callback flow, Robinhood Chain).
 It is the off-chain half of the new flow: nothing resolves by itself on-chain, so this
 service runs two cron jobs:
 
@@ -15,7 +15,7 @@ process with `viem` as its only runtime dependency.
 ```
                  cron #1 (resolver key)                    cron #2 (any wallet)
   ┌──────────┐   pendingResolution()     ┌──────────────┐   eth_getLogs      ┌───────────────┐
-  │ raffles  │ ────────────────────────► │ RaffledQuiver│ ────────────────►  │ local queue   │
+  │ raffles  │ ────────────────────────► │ WinrCore│ ────────────────►  │ local queue   │
   │ OPEN +   │   resolveRaffle(id,salt)  │  PENDING_VRF │  RandomnessFulfilled│ (state.json) │
   │ expired  │ ────────────────────────► │  ───────►    │                    │ settle(id)    │
   └──────────┘   (Quiver push callback)  │  RESOLVED    │ ◄────────────────── │ COMPLETED     │
@@ -103,7 +103,7 @@ All config is env-driven; see `.env.example` for the full annotated list.
 | Variable | Required | Default | Purpose |
 | --- | --- | --- | --- |
 | `RAFFLE_RPC_URL` | yes | — | Robinhood Chain RPC (mainnet 4663 / testnet 46630). |
-| `RAFFLE_CONTRACT_ADDRESS` | yes | — | The new `RaffledQuiver` address. |
+| `RAFFLE_CONTRACT_ADDRESS` | yes | — | The new `WinrCore` address. |
 | `RAFFLE_RESOLVER_PRIVATE_KEY` | for cron #1 | — | Resolver key, allowlisted via `setResolver`. Never logged. |
 | `RAFFLE_SETTLER_PRIVATE_KEY` | no | resolver key | Signer for permissionless `settle()`. |
 | `RAFFLE_CHAIN_ID` | no | auto-detect | Enforce chain id; mismatches abort startup. |
@@ -217,16 +217,16 @@ settlements, failed cancel/retry transactions.
 ### systemd (recommended)
 
 ```ini
-# /etc/systemd/system/raffled-keeper.service
+# /etc/systemd/system/winr-keeper.service
 [Unit]
-Description=RaffledQuiver keeper (resolve + settle)
+Description=WinrCore keeper (resolve + settle)
 After=network-online.target
 
 [Service]
 Type=simple
-User=raffled
-WorkingDirectory=/opt/raffled-keeper
-EnvironmentFile=/etc/raffled-keeper.env
+User=winr
+WorkingDirectory=/opt/winr-keeper
+EnvironmentFile=/etc/winr-keeper.env
 ExecStart=/usr/bin/node dist/index.js
 Restart=always
 RestartSec=5
@@ -238,8 +238,8 @@ WantedBy=multi-user.target
 
 ```bash
 npm run build                  # produces dist/
-systemctl enable --now raffled-keeper
-journalctl -u raffled-keeper -f
+systemctl enable --now winr-keeper
+journalctl -u winr-keeper -f
 ```
 
 ### External cron / timers
@@ -249,8 +249,8 @@ against overlap with `flock`; for different cadences run two entries with
 `RAFFLE_JOBS` and separate state files:
 
 ```cron
-*/2 * * * * flock -n /tmp/raffled-resolve.lock env RAFFLE_JOBS=resolve RAFFLE_RUN_ONCE=true RAFFLE_STATE_FILE=/var/lib/raffled/resolve.json node /opt/raffled-keeper/dist/index.js >> /var/log/raffled-resolve.log 2>&1
-* * * * *   flock -n /tmp/raffled-settle.lock  env RAFFLE_JOBS=settle  RAFFLE_RUN_ONCE=true RAFFLE_STATE_FILE=/var/lib/raffled/settle.json  node /opt/raffled-keeper/dist/index.js >> /var/log/raffled-settle.log 2>&1
+*/2 * * * * flock -n /tmp/winr-resolve.lock env RAFFLE_JOBS=resolve RAFFLE_RUN_ONCE=true RAFFLE_STATE_FILE=/var/lib/winr/resolve.json node /opt/winr-keeper/dist/index.js >> /var/log/winr-resolve.log 2>&1
+* * * * *   flock -n /tmp/winr-settle.lock  env RAFFLE_JOBS=settle  RAFFLE_RUN_ONCE=true RAFFLE_STATE_FILE=/var/lib/winr/settle.json  node /opt/winr-keeper/dist/index.js >> /var/log/winr-settle.log 2>&1
 ```
 
 ### Recovering an abandoned settlement
@@ -277,7 +277,7 @@ grep -rniE 'checkUpkeep|performUpkeep|VRFRequested|KeeperCompatible|subscription
 Nothing forced a reuse of the old shapes; the new contract exposes first-class keeper
 views and a separate settlement step, so the mapping is direct:
 
-| Legacy `RaffledCore` (Base, Chainlink) | This keeper (RaffledQuiver, Quiver) |
+| Legacy `RaffledCore` (Base, Chainlink) | This keeper (WinrCore, Quiver) |
 | --- | --- |
 | Chainlink Automation calls `checkUpkeep` every block | keeper cron #1 calls `pendingResolution(cursor, limit)` on its own schedule |
 | `performUpkeep(performData)` requests VRF | `resolveRaffle(id, salt)` with a fresh secret CSPRNG salt (resolver-gated) |
@@ -289,20 +289,20 @@ views and a separate settlement step, so the mapping is direct:
 `checkUpkeep` / `performUpkeep` / `VRFRequested` still exist in the repository only in the
 **legacy, untouched** artifacts: `src/RaffledCore.sol`, `src/RaffleManager{3,4,5,6}.sol`,
 their tests, old scripts, and the root `README.md`. Neither this keeper nor
-`src/RaffledQuiver.sol` uses them.
+`src/WinrCore.sol` uses them.
 
 ---
 
 ## 7. File map
 
 ```
-raffled-keeper/
+winr-keeper/
 ├── src/
 │   ├── index.ts             # config load, preflight checks, scheduler, shutdown
 │   ├── config.ts            # env parsing + validation (ConfigError lists all problems)
 │   ├── logger.ts            # structured JSON logs, salt/key redaction
 │   ├── alerts.ts            # rate-limited loud alerts + optional webhook
-│   ├── abi.ts               # trimmed RaffledQuiver ABI (+ errors for revert decoding)
+│   ├── abi.ts               # trimmed WinrCore ABI (+ errors for revert decoding)
 │   ├── chain.ts             # Robinhood chain defs (4663/46630), viem clients
 │   ├── errors.ts            # custom-error decoding, transient classification
 │   ├── tx.ts                # send + confirm + retry/backoff + receipt-revert decoding

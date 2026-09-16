@@ -1,8 +1,8 @@
 {
-  "name": "raffled-keeper",
+  "name": "winr-keeper",
   "version": "1.0.0",
   "private": true,
-  "description": "Keeper service for RaffledQuiver (Robinhood Chain): resolution requester cron + settlement relayer cron.",
+  "description": "Keeper service for WinrCore (Robinhood Chain): resolution requester cron + settlement relayer cron.",
   "type": "module",
   "license": "MIT",
   "engines": {

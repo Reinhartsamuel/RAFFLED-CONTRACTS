@@ -2,10 +2,10 @@
 pragma solidity ^0.8.24;
 
 import {Script} from "forge-std/Script.sol";
-import {RaffledQuiver} from "../src/RaffledQuiver.sol";
+import {WinrCore} from "../src/WinrCore.sol";
 
-/// @title  DeployRaffledQuiver
-/// @notice Deploys RaffledQuiver for a target chain. Reads configuration from env:
+/// @title  DeployWinrCore
+/// @notice Deploys WinrCore for a target chain. Reads configuration from env:
 ///
 ///         PRIVATE_KEY                deployer key
 ///         QUIVER_COORDINATOR         Quiver coordinator address (testnet 0x1da3...2fb40)
@@ -16,24 +16,24 @@ import {RaffledQuiver} from "../src/RaffledQuiver.sol";
 ///         RAFFLE_SIGNER              free-entry EIP-712 signer
 ///         RAFFLE_OWNER               initial owner (multisig recommended)
 ///
-///         forge script script/DeployRaffledQuiver.s.sol \
+///         forge script script/DeployWinrCore.s.sol \
 ///           --rpc-url robinhood_testnet --broadcast -vvvv
 ///
 /// @dev    After deploy: set the resolver keeper, propose/apply the platform fee, and top the
 ///         manager up with native ETH if the provider quotes a non-zero fee.
-contract DeployRaffledQuiver is Script {
-    function run() external returns (RaffledQuiver mgr) {
+contract DeployWinrCore is Script {
+    function run() external returns (WinrCore mgr) {
         uint256 deployerKey = vm.envUint("DEPLOYER_PRIVATE_KEY");
         address coordinator = vm.envAddress("QUIVER_COORDINATOR");
         address provider = vm.envAddress("QUIVER_PROVIDER");
         address fallbackProvider = vm.envOr("QUIVER_FALLBACK_PROVIDER", address(0));
         address paymentToken = vm.envAddress("PAYMENT_TOKEN");
         address treasury = vm.envAddress("TREASURY");
-        address signer = vm.envOr("RAFFLE_SIGNER",address(0x753dFC03b4d37B3a316D0Fe5aB9F677C0D3C20f8));
+        address signer = vm.envOr("RAFFLE_SIGNER", address(0x753dFC03b4d37B3a316D0Fe5aB9F677C0D3C20f8));
         address owner = vm.envOr("RAFFLE_OWNER", address(msg.sender));
 
         vm.startBroadcast(deployerKey);
-        mgr = new RaffledQuiver(coordinator, provider, fallbackProvider, paymentToken, treasury, signer, owner);
+        mgr = new WinrCore(coordinator, provider, fallbackProvider, paymentToken, treasury, signer, owner);
         vm.stopBroadcast();
     }
 }

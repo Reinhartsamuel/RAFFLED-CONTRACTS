@@ -2,7 +2,7 @@
 pragma solidity ^0.8.24;
 
 import {QuiverBaseTest} from "./QuiverBase.t.sol";
-import {RaffledQuiver} from "../src/RaffledQuiver.sol";
+import {WinrCore} from "../src/WinrCore.sol";
 import {BlacklistERC20} from "./mocks/BlacklistERC20.sol";
 import {MaliciousPrizeToken} from "./mocks/MaliciousPrizeToken.sol";
 import {RevertingERC721} from "./mocks/RevertingERC721.sol";
@@ -10,9 +10,9 @@ import {StandardERC20} from "./mocks/StandardERC20.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IERC721} from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 
-/// @notice Settlement robustness for RaffledQuiver: escrow fallbacks, hostile tokens,
+/// @notice Settlement robustness for WinrCore: escrow fallbacks, hostile tokens,
 ///         reentrancy, disposal-once, double-settle and claim paths.
-contract RaffledQuiverSettlementTest is QuiverBaseTest {
+contract WinrCoreSettlementTest is QuiverBaseTest {
     bytes32 constant SALT_2 = keccak256("salt_2");
     bytes32 constant SALT_3 = keccak256("salt_3");
     // ═════════════════════════════════════════════════════════════════════════
@@ -129,7 +129,7 @@ contract RaffledQuiverSettlementTest is QuiverBaseTest {
 
     function test_Claim_RevertsWhenNothingClaimable() external {
         vm.prank(ALICE);
-        vm.expectRevert(RaffledQuiver.NoClaimable.selector);
+        vm.expectRevert(WinrCore.NoClaimable.selector);
         mgr.claim(address(usdc));
     }
 
@@ -202,7 +202,7 @@ contract RaffledQuiverSettlementTest is QuiverBaseTest {
 
         // MockERC721 always transfers fine, so nothing is escrowed.
         vm.prank(BOB);
-        vm.expectRevert(RaffledQuiver.NoNftClaim.selector);
+        vm.expectRevert(WinrCore.NoNftClaim.selector);
         mgr.claimNft(address(nft), NFT_TOKEN_ID_2);
     }
 
@@ -224,7 +224,7 @@ contract RaffledQuiverSettlementTest is QuiverBaseTest {
         _reveal(raffleId, SALT_1);
 
         // Prize token re-enters settle() during the payout transfer.
-        prize.setReenter(address(mgr), abi.encodeWithSelector(RaffledQuiver.settle.selector, raffleId));
+        prize.setReenter(address(mgr), abi.encodeWithSelector(WinrCore.settle.selector, raffleId));
         prize.setMode(MaliciousPrizeToken.Mode.Reenter);
         _settle(raffleId);
 
@@ -235,7 +235,7 @@ contract RaffledQuiverSettlementTest is QuiverBaseTest {
         assertTrue(mgr.prizeDisposed(raffleId));
 
         // The inner reentrant settle() reverted; a follow-up settle also reverts.
-        vm.expectRevert(abi.encodeWithSelector(RaffledQuiver.RaffleNotResolved.selector, raffleId));
+        vm.expectRevert(abi.encodeWithSelector(WinrCore.RaffleNotResolved.selector, raffleId));
         mgr.settle(raffleId);
     }
 
@@ -257,7 +257,7 @@ contract RaffledQuiverSettlementTest is QuiverBaseTest {
         _settle(raffleId); // escrowed
         assertEq(mgr.claimable(address(prize), ALICE), PRIZE_AMT - (PRIZE_AMT * FEE_BPS) / 10_000);
 
-        prize.setReenter(address(mgr), abi.encodeWithSelector(RaffledQuiver.claim.selector, address(prize)));
+        prize.setReenter(address(mgr), abi.encodeWithSelector(WinrCore.claim.selector, address(prize)));
         prize.setMode(MaliciousPrizeToken.Mode.Reenter);
 
         vm.prank(ALICE);
@@ -275,8 +275,7 @@ contract RaffledQuiverSettlementTest is QuiverBaseTest {
         BlacklistERC20 pay = new BlacklistERC20("PayBlack", "PYB", 1_000_000e18);
         pay.transfer(ALICE, 100_000e18);
 
-        RaffledQuiver local =
-            new RaffledQuiver(address(coord), providerA, providerB, address(pay), TREASURY, SIGNER, OWNER);
+        WinrCore local = new WinrCore(address(coord), providerA, providerB, address(pay), TREASURY, SIGNER, OWNER);
         local.setResolver(RESOLVER, true);
 
         // Host = this test; platform fee defaults to 0 on the fresh instance.
@@ -337,7 +336,7 @@ contract RaffledQuiverSettlementTest is QuiverBaseTest {
         vm.warp(block.timestamp + DURATION + mgr.HARD_DEADLINE() + 1);
         mgr.cancelStalledRaffle(raffleId);
 
-        vm.expectRevert(abi.encodeWithSelector(RaffledQuiver.RaffleNotResolved.selector, raffleId));
+        vm.expectRevert(abi.encodeWithSelector(WinrCore.RaffleNotResolved.selector, raffleId));
         mgr.settle(raffleId);
     }
 
@@ -348,7 +347,7 @@ contract RaffledQuiverSettlementTest is QuiverBaseTest {
         _resolveRevealSettle(raffleId);
 
         vm.prank(RESOLVER);
-        vm.expectRevert(abi.encodeWithSelector(RaffledQuiver.RaffleNotOpen.selector, raffleId));
+        vm.expectRevert(abi.encodeWithSelector(WinrCore.RaffleNotOpen.selector, raffleId));
         mgr.resolveRaffle(raffleId, SALT_2);
     }
 

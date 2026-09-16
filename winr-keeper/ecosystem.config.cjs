@@ -1,7 +1,7 @@
 module.exports = {
   apps: [
     {
-      name: "raffled-keeper",
+      name: "winr-keeper",
       cwd: __dirname,
       script: "npm",
       args: "run start:dist",

@@ -2,11 +2,11 @@
 pragma solidity ^0.8.24;
 
 import {QuiverBaseTest} from "./QuiverBase.t.sol";
-import {RaffledQuiver} from "../src/RaffledQuiver.sol";
+import {WinrCore} from "../src/WinrCore.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-/// @notice Fuzz coverage for RaffledQuiver winner selection and terminal-state solvency.
-contract RaffledQuiverFuzzTest is QuiverBaseTest {
+/// @notice Fuzz coverage for WinrCore winner selection and terminal-state solvency.
+contract WinrCoreFuzzTest is QuiverBaseTest {
     bytes32 constant SALT_2 = keccak256("salt_2");
     bytes32 constant SALT_3 = keccak256("salt_3");
 

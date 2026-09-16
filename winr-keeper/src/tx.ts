@@ -1,10 +1,10 @@
 import type { Account, Address, Abi, Chain, Hex, PublicClient, TransactionReceipt, WalletClient } from 'viem';
-import { raffledQuiverAbi } from './abi.ts';
+import { winrCoreAbi } from './abi.ts';
 import type { KeeperConfig } from './config.ts';
 import { decodeError, isTransientError, sleep, type DecodedError } from './errors.ts';
 import type { Logger } from './logger.ts';
 
-const looseAbi = raffledQuiverAbi as unknown as Abi;
+const looseAbi = winrCoreAbi as unknown as Abi;
 
 export interface SendRequest {
   functionName: string;

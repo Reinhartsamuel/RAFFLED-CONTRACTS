@@ -2,7 +2,7 @@
 pragma solidity ^0.8.24;
 
 import {QuiverBaseTest} from "./QuiverBase.t.sol";
-import {RaffledQuiver} from "../src/RaffledQuiver.sol";
+import {WinrCore} from "../src/WinrCore.sol";
 import {FreeEntryVerifier2} from "../src/FreeEntryVerifier2.sol";
 import {QuiverConsumer} from "quiver/QuiverConsumer.sol";
 import {QuiverStructs} from "quiver/libraries/QuiverStructs.sol";
@@ -13,11 +13,11 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IERC721} from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 
-/// @notice Adapted port of test/RaffledCore.t.sol for RaffledQuiver. The Chainlink
+/// @notice Adapted port of test/RaffledCore.t.sol for WinrCore. The Chainlink
 ///         Automation/VRF two-step (`checkUpkeep`/`performUpkeep`/`fulfillRandomWords`)
 ///         is replaced by the resolver → Quiver callback → settle lifecycle:
 ///         resolveRaffle(salt) → (keeper reveal) → RESOLVED → settle().
-contract RaffledQuiverTest is QuiverBaseTest {
+contract WinrCoreTest is QuiverBaseTest {
     // ═════════════════════════════════════════════════════════════════════════
     //  Constructor Tests
     // ═════════════════════════════════════════════════════════════════════════
@@ -36,33 +36,33 @@ contract RaffledQuiverTest is QuiverBaseTest {
     }
 
     function test_Constructor_RevertInvalidPaymentToken() external {
-        vm.expectRevert(RaffledQuiver.InvalidParams.selector);
-        new RaffledQuiver(address(coord), providerA, providerB, address(0), TREASURY, SIGNER, OWNER);
+        vm.expectRevert(WinrCore.InvalidParams.selector);
+        new WinrCore(address(coord), providerA, providerB, address(0), TREASURY, SIGNER, OWNER);
     }
 
     function test_Constructor_RevertInvalidTreasury() external {
-        vm.expectRevert(RaffledQuiver.InvalidParams.selector);
-        new RaffledQuiver(address(coord), providerA, providerB, address(usdc), address(0), SIGNER, OWNER);
+        vm.expectRevert(WinrCore.InvalidParams.selector);
+        new WinrCore(address(coord), providerA, providerB, address(usdc), address(0), SIGNER, OWNER);
     }
 
     function test_Constructor_RevertInvalidSigner() external {
         vm.expectRevert("Invalid signer");
-        new RaffledQuiver(address(coord), providerA, providerB, address(usdc), TREASURY, address(0), OWNER);
+        new WinrCore(address(coord), providerA, providerB, address(usdc), TREASURY, address(0), OWNER);
     }
 
     function test_Constructor_RevertZeroInitialOwner() external {
         vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableInvalidOwner.selector, address(0)));
-        new RaffledQuiver(address(coord), providerA, providerB, address(usdc), TREASURY, SIGNER, address(0));
+        new WinrCore(address(coord), providerA, providerB, address(usdc), TREASURY, SIGNER, address(0));
     }
 
     function test_Constructor_RevertZeroQuiver() external {
         vm.expectRevert(QuiverConsumer.ZeroAddress.selector);
-        new RaffledQuiver(address(0), providerA, providerB, address(usdc), TREASURY, SIGNER, OWNER);
+        new WinrCore(address(0), providerA, providerB, address(usdc), TREASURY, SIGNER, OWNER);
     }
 
     function test_Constructor_RevertZeroProvider() external {
         vm.expectRevert(QuiverConsumer.ZeroAddress.selector);
-        new RaffledQuiver(address(coord), address(0), providerB, address(usdc), TREASURY, SIGNER, OWNER);
+        new WinrCore(address(coord), address(0), providerB, address(usdc), TREASURY, SIGNER, OWNER);
     }
 
     // ═════════════════════════════════════════════════════════════════════════
@@ -75,7 +75,7 @@ contract RaffledQuiverTest is QuiverBaseTest {
         assertEq(raffleId, 1);
         assertEq(mgr.raffleCount(), 1);
 
-        RaffledQuiver.RaffleData memory raffle = mgr.getRaffle(raffleId);
+        WinrCore.RaffleData memory raffle = mgr.getRaffle(raffleId);
         assertEq(raffle.host, HOST);
         assertEq(raffle.prizeAsset, address(prizeToken));
         assertEq(uint256(raffle.prizeType), 0);
@@ -94,11 +94,11 @@ contract RaffledQuiverTest is QuiverBaseTest {
 
         vm.prank(HOST);
         vm.expectEmit(true, true, false, true);
-        emit RaffledQuiver.RaffleCreated(
+        emit WinrCore.RaffleCreated(
             1,
             HOST,
             address(prizeToken),
-            RaffledQuiver.PrizeType.ERC20,
+            WinrCore.PrizeType.ERC20,
             PRIZE_AMT,
             uint48(block.timestamp + DURATION),
             "PZ",
@@ -123,7 +123,7 @@ contract RaffledQuiverTest is QuiverBaseTest {
         IERC20(address(prizeToken)).approve(address(mgr), PRIZE_AMT);
 
         vm.prank(HOST);
-        vm.expectRevert(RaffledQuiver.InvalidParams.selector);
+        vm.expectRevert(WinrCore.InvalidParams.selector);
         mgr.createRaffleERC20(address(prizeToken), 0, TICKET_PRICE, MAX_CAP, DURATION);
     }
 
@@ -132,7 +132,7 @@ contract RaffledQuiverTest is QuiverBaseTest {
         IERC20(address(prizeToken)).approve(address(mgr), PRIZE_AMT);
 
         vm.prank(HOST);
-        vm.expectRevert(RaffledQuiver.InvalidParams.selector);
+        vm.expectRevert(WinrCore.InvalidParams.selector);
         mgr.createRaffleERC20(address(prizeToken), PRIZE_AMT, 0, MAX_CAP, DURATION);
     }
 
@@ -141,7 +141,7 @@ contract RaffledQuiverTest is QuiverBaseTest {
         IERC20(address(prizeToken)).approve(address(mgr), PRIZE_AMT);
 
         vm.prank(HOST);
-        vm.expectRevert(RaffledQuiver.InvalidParams.selector);
+        vm.expectRevert(WinrCore.InvalidParams.selector);
         mgr.createRaffleERC20(address(prizeToken), PRIZE_AMT, TICKET_PRICE, 0, DURATION);
     }
 
@@ -150,7 +150,7 @@ contract RaffledQuiverTest is QuiverBaseTest {
         IERC20(address(prizeToken)).approve(address(mgr), PRIZE_AMT);
 
         vm.prank(HOST);
-        vm.expectRevert(RaffledQuiver.InvalidParams.selector);
+        vm.expectRevert(WinrCore.InvalidParams.selector);
         mgr.createRaffleERC20(address(prizeToken), PRIZE_AMT, TICKET_PRICE, MAX_CAP, 0);
     }
 
@@ -159,7 +159,7 @@ contract RaffledQuiverTest is QuiverBaseTest {
         IERC20(address(prizeToken)).approve(address(mgr), PRIZE_AMT);
 
         vm.prank(HOST);
-        vm.expectRevert(abi.encodeWithSelector(RaffledQuiver.DurationTooShort.selector, 1 hours, 2 hours));
+        vm.expectRevert(abi.encodeWithSelector(WinrCore.DurationTooShort.selector, 1 hours, 2 hours));
         mgr.createRaffleERC20(address(prizeToken), PRIZE_AMT, TICKET_PRICE, MAX_CAP, 1 hours);
     }
 
@@ -170,7 +170,7 @@ contract RaffledQuiverTest is QuiverBaseTest {
         vm.prank(HOST);
         uint256 raffleId = mgr.createRaffleERC20(address(prizeToken), PRIZE_AMT, TICKET_PRICE, MAX_CAP, 2 hours);
 
-        RaffledQuiver.RaffleData memory raffle = mgr.getRaffle(raffleId);
+        WinrCore.RaffleData memory raffle = mgr.getRaffle(raffleId);
         assertEq(raffle.expiry, block.timestamp + 2 hours);
     }
 
@@ -182,9 +182,7 @@ contract RaffledQuiverTest is QuiverBaseTest {
         IERC20(address(fot)).approve(address(mgr), PRIZE_AMT);
 
         vm.prank(HOST);
-        vm.expectRevert(
-            abi.encodeWithSelector(RaffledQuiver.PrizeAmountMismatch.selector, PRIZE_AMT, PRIZE_AMT - 10e18)
-        );
+        vm.expectRevert(abi.encodeWithSelector(WinrCore.PrizeAmountMismatch.selector, PRIZE_AMT, PRIZE_AMT - 10e18));
         mgr.createRaffleERC20(address(fot), PRIZE_AMT, TICKET_PRICE, MAX_CAP, DURATION);
     }
 
@@ -198,7 +196,7 @@ contract RaffledQuiverTest is QuiverBaseTest {
         assertEq(raffleId, 1);
         assertEq(mgr.raffleCount(), 1);
 
-        RaffledQuiver.RaffleData memory raffle = mgr.getRaffle(raffleId);
+        WinrCore.RaffleData memory raffle = mgr.getRaffle(raffleId);
         assertEq(raffle.host, HOST);
         assertEq(raffle.prizeAsset, address(nft));
         assertEq(uint256(raffle.prizeType), 1);
@@ -215,11 +213,11 @@ contract RaffledQuiverTest is QuiverBaseTest {
 
         vm.prank(HOST);
         vm.expectEmit(true, true, false, true);
-        emit RaffledQuiver.RaffleCreated(
+        emit WinrCore.RaffleCreated(
             1,
             HOST,
             address(nft),
-            RaffledQuiver.PrizeType.ERC721,
+            WinrCore.PrizeType.ERC721,
             NFT_TOKEN_ID,
             uint48(block.timestamp + DURATION),
             "MockNFT",
@@ -237,7 +235,7 @@ contract RaffledQuiverTest is QuiverBaseTest {
 
     function test_CreateERC721Raffle_RevertZeroAddress() external {
         vm.prank(HOST);
-        vm.expectRevert(RaffledQuiver.InvalidParams.selector);
+        vm.expectRevert(WinrCore.InvalidParams.selector);
         mgr.createRaffleERC721(address(0), NFT_TOKEN_ID, TICKET_PRICE, MAX_CAP, DURATION);
     }
 
@@ -246,7 +244,7 @@ contract RaffledQuiverTest is QuiverBaseTest {
         IERC721(address(nft)).approve(address(mgr), NFT_TOKEN_ID);
 
         vm.prank(HOST);
-        vm.expectRevert(RaffledQuiver.InvalidParams.selector);
+        vm.expectRevert(WinrCore.InvalidParams.selector);
         mgr.createRaffleERC721(address(nft), NFT_TOKEN_ID, 0, MAX_CAP, DURATION);
     }
 
@@ -255,7 +253,7 @@ contract RaffledQuiverTest is QuiverBaseTest {
         IERC721(address(nft)).approve(address(mgr), NFT_TOKEN_ID);
 
         vm.prank(HOST);
-        vm.expectRevert(abi.encodeWithSelector(RaffledQuiver.DurationTooShort.selector, 1 hours, 2 hours));
+        vm.expectRevert(abi.encodeWithSelector(WinrCore.DurationTooShort.selector, 1 hours, 2 hours));
         mgr.createRaffleERC721(address(nft), NFT_TOKEN_ID, TICKET_PRICE, MAX_CAP, 1 hours);
     }
 
@@ -270,7 +268,7 @@ contract RaffledQuiverTest is QuiverBaseTest {
 
         assertEq(mgr.getTotalTickets(raffleId), 5);
 
-        RaffledQuiver.RaffleData memory raffle = mgr.getRaffle(raffleId);
+        WinrCore.RaffleData memory raffle = mgr.getRaffle(raffleId);
         assertEq(raffle.ticketsSold, 5);
 
         (address owner, uint256 endTicket) = mgr.getTicketRange(raffleId, 0);
@@ -287,7 +285,7 @@ contract RaffledQuiverTest is QuiverBaseTest {
 
         vm.prank(ALICE);
         vm.expectEmit(true, true, false, true);
-        emit RaffledQuiver.TicketPurchased(raffleId, ALICE, 5);
+        emit WinrCore.TicketPurchased(raffleId, ALICE, 5);
         mgr.enterRaffle(raffleId, 5);
     }
 
@@ -346,7 +344,7 @@ contract RaffledQuiverTest is QuiverBaseTest {
         IERC20(address(usdc)).approve(address(mgr), cost);
 
         vm.prank(ALICE);
-        vm.expectRevert(abi.encodeWithSelector(RaffledQuiver.RaffleNotOpen.selector, 1));
+        vm.expectRevert(abi.encodeWithSelector(WinrCore.RaffleNotOpen.selector, 1));
         mgr.enterRaffle(1, 1);
     }
 
@@ -357,7 +355,7 @@ contract RaffledQuiverTest is QuiverBaseTest {
         IERC20(address(usdc)).approve(address(mgr), TICKET_PRICE);
 
         vm.prank(HOST);
-        vm.expectRevert(abi.encodeWithSelector(RaffledQuiver.HostCannotEnter.selector, raffleId));
+        vm.expectRevert(abi.encodeWithSelector(WinrCore.HostCannotEnter.selector, raffleId));
         mgr.enterRaffle(raffleId, 1);
     }
 
@@ -365,7 +363,7 @@ contract RaffledQuiverTest is QuiverBaseTest {
         uint256 raffleId = _createERC20Raffle();
 
         vm.prank(ALICE);
-        vm.expectRevert(RaffledQuiver.InvalidParams.selector);
+        vm.expectRevert(WinrCore.InvalidParams.selector);
         mgr.enterRaffle(raffleId, 0);
     }
 
@@ -380,7 +378,7 @@ contract RaffledQuiverTest is QuiverBaseTest {
         IERC20(address(usdc)).approve(address(mgr), cost);
 
         vm.prank(CHARLIE);
-        vm.expectRevert(abi.encodeWithSelector(RaffledQuiver.MaxCapReached.selector, raffleId));
+        vm.expectRevert(abi.encodeWithSelector(WinrCore.MaxCapReached.selector, raffleId));
         mgr.enterRaffle(raffleId, 1);
     }
 
@@ -394,7 +392,7 @@ contract RaffledQuiverTest is QuiverBaseTest {
         IERC20(address(usdc)).approve(address(mgr), cost);
 
         vm.prank(BOB);
-        vm.expectRevert(abi.encodeWithSelector(RaffledQuiver.MaxCapReached.selector, raffleId));
+        vm.expectRevert(abi.encodeWithSelector(WinrCore.MaxCapReached.selector, raffleId));
         mgr.enterRaffle(raffleId, 5);
     }
 
@@ -402,7 +400,7 @@ contract RaffledQuiverTest is QuiverBaseTest {
         uint256 raffleId = _createERC20Raffle();
 
         vm.prank(ALICE);
-        vm.expectRevert(RaffledQuiver.InvalidParams.selector);
+        vm.expectRevert(WinrCore.InvalidParams.selector);
         mgr.enterRaffle(raffleId, uint256(type(uint96).max) + 1);
     }
 
@@ -433,7 +431,7 @@ contract RaffledQuiverTest is QuiverBaseTest {
         IERC20(address(usdc)).approve(address(mgr), cost);
 
         vm.prank(BOB);
-        vm.expectRevert(abi.encodeWithSelector(RaffledQuiver.RaffleNotOpen.selector, raffleId));
+        vm.expectRevert(abi.encodeWithSelector(WinrCore.RaffleNotOpen.selector, raffleId));
         mgr.enterRaffle(raffleId, 1);
     }
 
@@ -461,7 +459,7 @@ contract RaffledQuiverTest is QuiverBaseTest {
 
         assertEq(mgr.getTotalTickets(raffleId), 1);
 
-        RaffledQuiver.RaffleData memory raffle = mgr.getRaffle(raffleId);
+        WinrCore.RaffleData memory raffle = mgr.getRaffle(raffleId);
         assertEq(raffle.ticketsSold, 1);
     }
 
@@ -471,7 +469,7 @@ contract RaffledQuiverTest is QuiverBaseTest {
 
         vm.prank(ALICE);
         vm.expectEmit(true, true, false, true);
-        emit RaffledQuiver.TicketPurchased(raffleId, ALICE, 1);
+        emit WinrCore.TicketPurchased(raffleId, ALICE, 1);
         mgr.enterFreeRaffle(raffleId, signature);
     }
 
@@ -521,7 +519,7 @@ contract RaffledQuiverTest is QuiverBaseTest {
         bytes memory signature = _signFreeEntry(raffleId, ALICE);
 
         vm.prank(ALICE);
-        vm.expectRevert(abi.encodeWithSelector(RaffledQuiver.RaffleNotOpen.selector, raffleId));
+        vm.expectRevert(abi.encodeWithSelector(WinrCore.RaffleNotOpen.selector, raffleId));
         mgr.enterFreeRaffle(raffleId, signature);
     }
 
@@ -530,7 +528,7 @@ contract RaffledQuiverTest is QuiverBaseTest {
         bytes memory signature = _signFreeEntry(raffleId, HOST);
 
         vm.prank(HOST);
-        vm.expectRevert(abi.encodeWithSelector(RaffledQuiver.HostCannotEnter.selector, raffleId));
+        vm.expectRevert(abi.encodeWithSelector(WinrCore.HostCannotEnter.selector, raffleId));
         mgr.enterFreeRaffle(raffleId, signature);
     }
 
@@ -541,7 +539,7 @@ contract RaffledQuiverTest is QuiverBaseTest {
 
         bytes memory signature = _signFreeEntry(raffleId, BOB);
         vm.prank(BOB);
-        vm.expectRevert(abi.encodeWithSelector(RaffledQuiver.MaxCapReached.selector, raffleId));
+        vm.expectRevert(abi.encodeWithSelector(WinrCore.MaxCapReached.selector, raffleId));
         mgr.enterFreeRaffle(raffleId, signature);
     }
 
@@ -599,7 +597,7 @@ contract RaffledQuiverTest is QuiverBaseTest {
         _enterAs(ALICE, raffleId, 5);
         _warpPastExpiry();
 
-        vm.expectRevert(abi.encodeWithSelector(RaffledQuiver.NotResolver.selector, address(this)));
+        vm.expectRevert(abi.encodeWithSelector(WinrCore.NotResolver.selector, address(this)));
         mgr.resolveRaffle(raffleId, SALT_1);
     }
 
@@ -608,7 +606,7 @@ contract RaffledQuiverTest is QuiverBaseTest {
         _enterAs(ALICE, raffleId, 5);
 
         vm.prank(RESOLVER);
-        vm.expectRevert(abi.encodeWithSelector(RaffledQuiver.RaffleNotExpired.selector, raffleId));
+        vm.expectRevert(abi.encodeWithSelector(WinrCore.RaffleNotExpired.selector, raffleId));
         mgr.resolveRaffle(raffleId, SALT_1);
     }
 
@@ -617,7 +615,7 @@ contract RaffledQuiverTest is QuiverBaseTest {
         _warpPastExpiry();
 
         vm.prank(RESOLVER);
-        vm.expectRevert(abi.encodeWithSelector(RaffledQuiver.RaffleNoTickets.selector, raffleId));
+        vm.expectRevert(abi.encodeWithSelector(WinrCore.RaffleNoTickets.selector, raffleId));
         mgr.resolveRaffle(raffleId, SALT_1);
     }
 
@@ -627,7 +625,7 @@ contract RaffledQuiverTest is QuiverBaseTest {
         _warpPastExpiry();
 
         vm.prank(RESOLVER);
-        vm.expectRevert(RaffledQuiver.SaltZero.selector);
+        vm.expectRevert(WinrCore.SaltZero.selector);
         mgr.resolveRaffle(raffleId, bytes32(0));
     }
 
@@ -638,7 +636,7 @@ contract RaffledQuiverTest is QuiverBaseTest {
         _warpPastExpiry();
         _resolve(raffleId, SALT_1);
 
-        RaffledQuiver.RaffleData memory raffle = mgr.getRaffle(raffleId);
+        WinrCore.RaffleData memory raffle = mgr.getRaffle(raffleId);
         assertEq(uint256(raffle.status), 1); // PENDING_VRF
         assertFalse(raffle.underfilled); // full-fill
 
@@ -658,7 +656,7 @@ contract RaffledQuiverTest is QuiverBaseTest {
         _warpPastExpiry();
         vm.prank(RESOLVER);
         vm.expectEmit(true, true, true, true);
-        emit RaffledQuiver.RandomnessRequested(raffleId, providerA, 1, 1);
+        emit WinrCore.RandomnessRequested(raffleId, providerA, 1, 1);
         mgr.resolveRaffle(raffleId, SALT_1);
     }
 
@@ -669,7 +667,7 @@ contract RaffledQuiverTest is QuiverBaseTest {
         _warpPastExpiry();
         _resolve(raffleId, SALT_1);
 
-        RaffledQuiver.RaffleData memory raffle = mgr.getRaffle(raffleId);
+        WinrCore.RaffleData memory raffle = mgr.getRaffle(raffleId);
         assertTrue(raffle.underfilled);
         assertEq(uint256(raffle.status), 1); // PENDING_VRF
 
@@ -687,7 +685,7 @@ contract RaffledQuiverTest is QuiverBaseTest {
         _resolve(raffleId, SALT_1);
 
         vm.prank(RESOLVER);
-        vm.expectRevert(abi.encodeWithSelector(RaffledQuiver.RaffleNotOpen.selector, raffleId));
+        vm.expectRevert(abi.encodeWithSelector(WinrCore.RaffleNotOpen.selector, raffleId));
         mgr.resolveRaffle(raffleId, keccak256("salt_2"));
     }
 
@@ -708,7 +706,7 @@ contract RaffledQuiverTest is QuiverBaseTest {
         mgr.resolveRaffle(raffleId2, SALT_1);
         // Pending now; simulate a stall by requesting again after timeout is not allowed either.
         vm.prank(RESOLVER);
-        vm.expectRevert(abi.encodeWithSelector(RaffledQuiver.RaffleNotOpen.selector, raffleId2));
+        vm.expectRevert(abi.encodeWithSelector(WinrCore.RaffleNotOpen.selector, raffleId2));
         mgr.resolveRaffle(raffleId2, SALT_1);
     }
 
@@ -751,7 +749,7 @@ contract RaffledQuiverTest is QuiverBaseTest {
         _resolve(raffleId, SALT_1);
         _reveal(raffleId, SALT_1);
 
-        RaffledQuiver.RaffleData memory raffle = mgr.getRaffle(raffleId);
+        WinrCore.RaffleData memory raffle = mgr.getRaffle(raffleId);
         assertEq(uint256(raffle.status), 4); // RESOLVED
         assertTrue(mgr.raffleRandomness(raffleId) != bytes32(0));
     }
@@ -775,7 +773,7 @@ contract RaffledQuiverTest is QuiverBaseTest {
         _resolve(raffleId, SALT_1);
 
         // PENDING_VRF — not yet settled.
-        vm.expectRevert(abi.encodeWithSelector(RaffledQuiver.RaffleNotResolved.selector, raffleId));
+        vm.expectRevert(abi.encodeWithSelector(WinrCore.RaffleNotResolved.selector, raffleId));
         mgr.settle(raffleId);
     }
 
@@ -787,7 +785,7 @@ contract RaffledQuiverTest is QuiverBaseTest {
         _reveal(raffleId, SALT_1);
 
         _settle(raffleId);
-        vm.expectRevert(abi.encodeWithSelector(RaffledQuiver.RaffleNotResolved.selector, raffleId));
+        vm.expectRevert(abi.encodeWithSelector(WinrCore.RaffleNotResolved.selector, raffleId));
         mgr.settle(raffleId);
     }
 
@@ -825,11 +823,11 @@ contract RaffledQuiverTest is QuiverBaseTest {
 
         // settle() emits the distribution event first, WinnerPicked last.
         vm.expectEmit(true, true, false, true);
-        emit RaffledQuiver.TokenPrizeAwarded(
+        emit WinrCore.TokenPrizeAwarded(
             raffleId, ALICE, address(prizeToken), PRIZE_AMT - prizeFee, paymentPool - paymentFee, prizeFee, paymentFee
         );
         vm.expectEmit(true, true, false, false);
-        emit RaffledQuiver.WinnerPicked(raffleId, ALICE);
+        emit WinrCore.WinnerPicked(raffleId, ALICE);
         _settle(raffleId);
     }
 
@@ -866,11 +864,11 @@ contract RaffledQuiverTest is QuiverBaseTest {
 
         // settle() emits UnderfilledPrizeReturned → UnderfilledPayout → WinnerPicked.
         vm.expectEmit(true, true, false, true);
-        emit RaffledQuiver.UnderfilledPrizeReturned(raffleId, HOST, PRIZE_AMT);
+        emit WinrCore.UnderfilledPrizeReturned(raffleId, HOST, PRIZE_AMT);
         vm.expectEmit(true, true, false, true);
-        emit RaffledQuiver.UnderfilledPayout(raffleId, ALICE, address(usdc), paymentPool - paymentFee, paymentFee);
+        emit WinrCore.UnderfilledPayout(raffleId, ALICE, address(usdc), paymentPool - paymentFee, paymentFee);
         vm.expectEmit(true, true, false, false);
-        emit RaffledQuiver.WinnerPicked(raffleId, ALICE);
+        emit WinrCore.WinnerPicked(raffleId, ALICE);
         _settle(raffleId);
     }
 
@@ -903,11 +901,11 @@ contract RaffledQuiverTest is QuiverBaseTest {
 
         // settle() emits NFTPrizeAwarded → WinnerPicked.
         vm.expectEmit(true, true, false, true);
-        emit RaffledQuiver.NFTPrizeAwarded(
+        emit WinrCore.NFTPrizeAwarded(
             raffleId, ALICE, address(nft), NFT_TOKEN_ID_2, paymentPool - paymentFee, paymentFee
         );
         vm.expectEmit(true, true, false, false);
-        emit RaffledQuiver.WinnerPicked(raffleId, ALICE);
+        emit WinrCore.WinnerPicked(raffleId, ALICE);
         _settle(raffleId);
     }
 
@@ -958,7 +956,7 @@ contract RaffledQuiverTest is QuiverBaseTest {
 
         mgr.completeEmptyRaffle(raffleId);
 
-        RaffledQuiver.RaffleData memory raffle = mgr.getRaffle(raffleId);
+        WinrCore.RaffleData memory raffle = mgr.getRaffle(raffleId);
         assertEq(uint256(raffle.status), 2); // COMPLETED
         assertTrue(raffle.underfilled);
         assertEq(IERC20(address(prizeToken)).balanceOf(HOST), 50_000e18);
@@ -970,14 +968,14 @@ contract RaffledQuiverTest is QuiverBaseTest {
         _warpPastExpiry();
 
         vm.expectEmit(true, false, false, false);
-        emit RaffledQuiver.RaffleExpired(raffleId);
+        emit WinrCore.RaffleExpired(raffleId);
         mgr.completeEmptyRaffle(raffleId);
     }
 
     function test_CompleteEmptyRaffle_RevertNotExpired() external {
         uint256 raffleId = _createERC20Raffle();
 
-        vm.expectRevert(abi.encodeWithSelector(RaffledQuiver.RaffleNotExpired.selector, raffleId));
+        vm.expectRevert(abi.encodeWithSelector(WinrCore.RaffleNotExpired.selector, raffleId));
         mgr.completeEmptyRaffle(raffleId);
     }
 
@@ -986,7 +984,7 @@ contract RaffledQuiverTest is QuiverBaseTest {
         _enterAs(ALICE, raffleId, 1);
         _warpPastExpiry();
 
-        vm.expectRevert(abi.encodeWithSelector(RaffledQuiver.RaffleHasTickets.selector, raffleId));
+        vm.expectRevert(abi.encodeWithSelector(WinrCore.RaffleHasTickets.selector, raffleId));
         mgr.completeEmptyRaffle(raffleId);
     }
 
@@ -996,7 +994,7 @@ contract RaffledQuiverTest is QuiverBaseTest {
         _warpPastExpiry();
         _resolveRevealSettle(raffleId);
 
-        vm.expectRevert(abi.encodeWithSelector(RaffledQuiver.RaffleNotOpen.selector, raffleId));
+        vm.expectRevert(abi.encodeWithSelector(WinrCore.RaffleNotOpen.selector, raffleId));
         mgr.completeEmptyRaffle(raffleId);
     }
 
@@ -1005,7 +1003,7 @@ contract RaffledQuiverTest is QuiverBaseTest {
         _enterAs(ALICE, raffleId, 5);
         _warpPastExpiry();
 
-        vm.expectRevert(RaffledQuiver.GraceNotElapsed.selector);
+        vm.expectRevert(WinrCore.GraceNotElapsed.selector);
         mgr.cancelExpiredRaffle(raffleId);
     }
 
@@ -1013,7 +1011,7 @@ contract RaffledQuiverTest is QuiverBaseTest {
         uint256 raffleId = _createERC20Raffle();
         _enterAs(ALICE, raffleId, 5);
 
-        vm.expectRevert(RaffledQuiver.GraceNotElapsed.selector);
+        vm.expectRevert(WinrCore.GraceNotElapsed.selector);
         mgr.cancelExpiredRaffle(raffleId);
     }
 
@@ -1024,7 +1022,7 @@ contract RaffledQuiverTest is QuiverBaseTest {
         vm.warp(block.timestamp + DURATION + mgr.RESOLVE_GRACE() + 1);
         mgr.cancelExpiredRaffle(raffleId);
 
-        RaffledQuiver.RaffleData memory raffle = mgr.getRaffle(raffleId);
+        WinrCore.RaffleData memory raffle = mgr.getRaffle(raffleId);
         assertEq(uint256(raffle.status), 3); // CANCELLED
         assertEq(IERC20(address(prizeToken)).balanceOf(HOST), 50_000e18);
     }
@@ -1035,7 +1033,7 @@ contract RaffledQuiverTest is QuiverBaseTest {
 
         vm.warp(block.timestamp + DURATION + mgr.RESOLVE_GRACE() + 1);
         vm.expectEmit(true, false, false, false);
-        emit RaffledQuiver.RaffleExpiredCancelled(raffleId);
+        emit WinrCore.RaffleExpiredCancelled(raffleId);
         mgr.cancelExpiredRaffle(raffleId);
     }
 
@@ -1045,7 +1043,7 @@ contract RaffledQuiverTest is QuiverBaseTest {
         _warpPastExpiry();
         _resolveRevealSettle(raffleId);
 
-        vm.expectRevert(abi.encodeWithSelector(RaffledQuiver.RaffleNotOpen.selector, raffleId));
+        vm.expectRevert(abi.encodeWithSelector(WinrCore.RaffleNotOpen.selector, raffleId));
         mgr.cancelExpiredRaffle(raffleId);
     }
 
@@ -1096,7 +1094,7 @@ contract RaffledQuiverTest is QuiverBaseTest {
 
         vm.prank(ALICE);
         vm.expectEmit(true, true, false, true);
-        emit RaffledQuiver.RefundClaimed(raffleId, ALICE, TICKET_PRICE * 5);
+        emit WinrCore.RefundClaimed(raffleId, ALICE, TICKET_PRICE * 5);
         mgr.claimRefund(raffleId);
     }
 
@@ -1124,7 +1122,7 @@ contract RaffledQuiverTest is QuiverBaseTest {
         mgr.claimRefund(raffleId);
 
         vm.prank(ALICE);
-        vm.expectRevert(RaffledQuiver.NoRefundAvailable.selector);
+        vm.expectRevert(WinrCore.NoRefundAvailable.selector);
         mgr.claimRefund(raffleId);
     }
 
@@ -1132,7 +1130,7 @@ contract RaffledQuiverTest is QuiverBaseTest {
         uint256 raffleId = _createERC20Raffle();
         _enterAs(ALICE, raffleId, 5);
 
-        vm.expectRevert(abi.encodeWithSelector(RaffledQuiver.RaffleNotCancelled.selector, raffleId));
+        vm.expectRevert(abi.encodeWithSelector(WinrCore.RaffleNotCancelled.selector, raffleId));
         mgr.claimRefund(raffleId);
     }
 
@@ -1144,12 +1142,12 @@ contract RaffledQuiverTest is QuiverBaseTest {
         mgr.cancelExpiredRaffle(raffleId);
 
         vm.prank(BOB);
-        vm.expectRevert(RaffledQuiver.NoRefundAvailable.selector);
+        vm.expectRevert(WinrCore.NoRefundAvailable.selector);
         mgr.claimRefund(raffleId);
     }
 
     function test_ClaimRefund_RevertOnNonExistentRaffle() external {
-        vm.expectRevert(abi.encodeWithSelector(RaffledQuiver.RaffleNotCancelled.selector, 42));
+        vm.expectRevert(abi.encodeWithSelector(WinrCore.RaffleNotCancelled.selector, 42));
         mgr.claimRefund(42);
     }
 
@@ -1173,7 +1171,7 @@ contract RaffledQuiverTest is QuiverBaseTest {
         mgr.cancelExpiredRaffle(raffleId);
 
         vm.prank(ALICE);
-        vm.expectRevert(RaffledQuiver.NoRefundAvailable.selector);
+        vm.expectRevert(WinrCore.NoRefundAvailable.selector);
         mgr.claimRefund(raffleId);
     }
 
@@ -1196,17 +1194,17 @@ contract RaffledQuiverTest is QuiverBaseTest {
 
     function test_ApplyFeeChange_RevertTimelockNotElapsed() external {
         mgr.proposeFeeChange(500);
-        vm.expectRevert(abi.encodeWithSelector(RaffledQuiver.FeeTimelockNotElapsed.selector, block.timestamp + 2 days));
+        vm.expectRevert(abi.encodeWithSelector(WinrCore.FeeTimelockNotElapsed.selector, block.timestamp + 2 days));
         mgr.applyFeeChange();
     }
 
     function test_ApplyFeeChange_RevertNoFeeChangePending() external {
-        vm.expectRevert(RaffledQuiver.NoFeeChangePending.selector);
+        vm.expectRevert(WinrCore.NoFeeChangePending.selector);
         mgr.applyFeeChange();
     }
 
     function test_ProposeFeeChange_RevertFeeTooHigh() external {
-        vm.expectRevert(abi.encodeWithSelector(RaffledQuiver.FeeTooHigh.selector, 1_001, 1_000));
+        vm.expectRevert(abi.encodeWithSelector(WinrCore.FeeTooHigh.selector, 1_001, 1_000));
         mgr.proposeFeeChange(1_001);
     }
 
@@ -1254,7 +1252,7 @@ contract RaffledQuiverTest is QuiverBaseTest {
     }
 
     function test_SetMinDuration_RevertBelowFloor() external {
-        vm.expectRevert(abi.encodeWithSelector(RaffledQuiver.DurationTooShort.selector, 1 hours, 2 hours));
+        vm.expectRevert(abi.encodeWithSelector(WinrCore.DurationTooShort.selector, 1 hours, 2 hours));
         mgr.setMinDuration(1 hours);
     }
 
@@ -1284,9 +1282,7 @@ contract RaffledQuiverTest is QuiverBaseTest {
         assertEq(mgr.pendingActiveProvider(), newProvider);
 
         // Cannot apply early.
-        vm.expectRevert(
-            abi.encodeWithSelector(RaffledQuiver.ProviderTimelockNotElapsed.selector, block.timestamp + 2 days)
-        );
+        vm.expectRevert(abi.encodeWithSelector(WinrCore.ProviderTimelockNotElapsed.selector, block.timestamp + 2 days));
         mgr.applyProviderChange();
 
         vm.warp(block.timestamp + 2 days + 1);
@@ -1298,12 +1294,12 @@ contract RaffledQuiverTest is QuiverBaseTest {
     }
 
     function test_ProviderChange_RevertZeroActive() external {
-        vm.expectRevert(RaffledQuiver.InvalidParams.selector);
+        vm.expectRevert(WinrCore.InvalidParams.selector);
         mgr.proposeProviderChange(address(0), address(0));
     }
 
     function test_ProviderChange_RevertNoPending() external {
-        vm.expectRevert(RaffledQuiver.NoPendingProviderChange.selector);
+        vm.expectRevert(WinrCore.NoPendingProviderChange.selector);
         mgr.applyProviderChange();
     }
 
@@ -1419,7 +1415,7 @@ contract RaffledQuiverTest is QuiverBaseTest {
         _warpPastExpiry();
 
         vm.prank(RESOLVER);
-        vm.expectRevert(abi.encodeWithSelector(RaffledQuiver.InsufficientFeeBalance.selector, 1 ether, 0));
+        vm.expectRevert(abi.encodeWithSelector(WinrCore.InsufficientFeeBalance.selector, 1 ether, 0));
         mgr.resolveRaffle(raffleId, SALT_1);
     }
 
@@ -1452,7 +1448,7 @@ contract RaffledQuiverTest is QuiverBaseTest {
         vm.prank(BOB);
         IERC20(address(usdc)).approve(address(mgr), TICKET_PRICE);
         vm.prank(BOB);
-        vm.expectRevert(abi.encodeWithSelector(RaffledQuiver.MaxCapReached.selector, raffleId));
+        vm.expectRevert(abi.encodeWithSelector(WinrCore.MaxCapReached.selector, raffleId));
         mgr.enterRaffle(raffleId, 1);
     }
 
@@ -1460,7 +1456,7 @@ contract RaffledQuiverTest is QuiverBaseTest {
         uint256 raffleId = _createERC20RaffleWithParams(TICKET_PRICE, 10, DURATION);
         _enterAs(ALICE, raffleId, 10);
 
-        RaffledQuiver.RaffleData memory raffle = mgr.getRaffle(raffleId);
+        WinrCore.RaffleData memory raffle = mgr.getRaffle(raffleId);
         assertEq(raffle.ticketsSold, 10);
         assertEq(raffle.ticketsSold, raffle.maxCap);
     }
@@ -1550,7 +1546,7 @@ contract RaffledQuiverTest is QuiverBaseTest {
         IERC20(address(prizeToken)).approve(address(mgr), PRIZE_AMT);
 
         vm.prank(HOST);
-        vm.expectRevert(RaffledQuiver.InvalidParams.selector);
+        vm.expectRevert(WinrCore.InvalidParams.selector);
         mgr.createRaffleERC20(address(prizeToken), PRIZE_AMT, TICKET_PRICE, MAX_CAP, uint256(type(uint48).max));
     }
 
@@ -1580,7 +1576,7 @@ contract RaffledQuiverTest is QuiverBaseTest {
     function test_GetRaffle_ReturnsCorrectData() external {
         uint256 raffleId = _createERC20Raffle();
 
-        RaffledQuiver.RaffleData memory raffle = mgr.getRaffle(raffleId);
+        WinrCore.RaffleData memory raffle = mgr.getRaffle(raffleId);
         assertEq(raffle.host, HOST);
         assertEq(raffle.prizeAsset, address(prizeToken));
         assertEq(uint256(raffle.prizeType), 0);
@@ -1657,7 +1653,7 @@ contract RaffledQuiverTest is QuiverBaseTest {
         _warpPastExpiry();
         _resolve(raffleId, SALT_1);
 
-        RaffledQuiver.ResolutionState memory state = mgr.getResolutionState(raffleId);
+        WinrCore.ResolutionState memory state = mgr.getResolutionState(raffleId);
         assertEq(uint256(state.status), 1); // PENDING_VRF
         assertEq(state.attempts, 1);
         assertEq(state.activeProviderAddr, providerA);

@@ -31,8 +31,8 @@ export function createAlerter(logger: Logger, webhookUrl?: string, cooldownMs = 
       if (webhookUrl === undefined) return;
       const body = JSON.stringify({
         // `content` for Discord, `text` for Slack-compatible endpoints.
-        content: `[raffled-keeper] ${title}`,
-        text: `[raffled-keeper] ${title}`,
+        content: `[winr-keeper] ${title}`,
+        text: `[winr-keeper] ${title}`,
         fields: payload,
       });
       void fetch(webhookUrl, {

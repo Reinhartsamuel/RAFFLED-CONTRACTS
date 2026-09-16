@@ -158,7 +158,7 @@ contract RaffledCoreTest is Test {
                 keccak256(
                     abi.encode(
                         keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
-                        keccak256(bytes("RaffledCore")),
+                        keccak256(bytes("WinrCore")),
                         keccak256(bytes("1")),
                         block.chainid,
                         address(mgr)

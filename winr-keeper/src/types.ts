@@ -1,4 +1,4 @@
-/** Enum mirror of `RaffledQuiver.RaffleStatus` (ABI encodes enums as uint8). */
+/** Enum mirror of `WinrCore.RaffleStatus` (ABI encodes enums as uint8). */
 export const RaffleStatus = {
   OPEN: 0,
   PENDING_VRF: 1,

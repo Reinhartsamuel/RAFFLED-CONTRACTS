@@ -1,4 +1,4 @@
-import { raffledQuiverAbi } from './abi.ts';
+import { winrCoreAbi } from './abi.ts';
 import { createAlerter } from './alerts.ts';
 import { createPublicContext, createWalletContext } from './chain.ts';
 import { ConfigError, loadConfig, type KeeperConfig } from './config.ts';
@@ -46,7 +46,7 @@ async function main(): Promise<void> {
     cfg = loadConfig();
   } catch (error) {
     if (error instanceof ConfigError) {
-      console.error(`raffled-keeper cannot start: ${error.message}`);
+      console.error(`winr-keeper cannot start: ${error.message}`);
       process.exit(2);
     }
     throw error;
@@ -85,7 +85,7 @@ async function main(): Promise<void> {
       const isResolver = (await publicClient
         .readContract({
           address: cfg.contractAddress,
-          abi: raffledQuiverAbi,
+          abi: winrCoreAbi,
           functionName: 'isResolver',
           args: [account.address],
         })
@@ -173,10 +173,10 @@ async function main(): Promise<void> {
     }
 
     const [raffleCount, contractBalance, randomnessFee, walletBalance] = await Promise.all([
-      publicClient.readContract({ address: cfg.contractAddress, abi: raffledQuiverAbi, functionName: 'raffleCount' }),
+      publicClient.readContract({ address: cfg.contractAddress, abi: winrCoreAbi, functionName: 'raffleCount' }),
       publicClient.getBalance({ address: cfg.contractAddress }),
       publicClient
-        .readContract({ address: cfg.contractAddress, abi: raffledQuiverAbi, functionName: 'randomnessFee' })
+        .readContract({ address: cfg.contractAddress, abi: winrCoreAbi, functionName: 'randomnessFee' })
         .catch(() => 0n),
       cfg.jobs.resolve || cfg.jobs.settle
         ? publicClient.getBalance({
@@ -185,7 +185,7 @@ async function main(): Promise<void> {
         : Promise.resolve(0n),
     ]);
 
-    logger.info('raffled-keeper started', {
+    logger.info('winr-keeper started', {
       contract: cfg.contractAddress,
       chainId,
       jobs: jobs.map((job) => job.name),
@@ -244,6 +244,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((error) => {
-  console.error(`raffled-keeper fatal: ${error instanceof Error ? (error.stack ?? error.message) : String(error)}`);
+  console.error(`winr-keeper fatal: ${error instanceof Error ? (error.stack ?? error.message) : String(error)}`);
   process.exit(1);
 });

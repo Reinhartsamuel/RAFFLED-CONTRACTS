@@ -4,11 +4,11 @@ pragma solidity ^0.8.24;
 import {ERC721} from "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 
-contract Raffled is ERC721 {
+contract WinrNft is ERC721 {
     uint256 public nextId;
     string public baseURI;
 
-    constructor(string memory _baseURI) ERC721("Raffled", "RFLD") {
+    constructor(string memory _baseURI) ERC721("Winr", "WINR") {
         baseURI = _baseURI;
     }
 

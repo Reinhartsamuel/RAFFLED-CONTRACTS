@@ -2,13 +2,13 @@
 pragma solidity ^0.8.24;
 
 import {QuiverBaseTest} from "./QuiverBase.t.sol";
-import {RaffledQuiver} from "../src/RaffledQuiver.sol";
+import {WinrCore} from "../src/WinrCore.sol";
 import {MockQuiverCoordinator} from "./mocks/MockQuiverCoordinator.sol";
 import {TooManyHashes, ProviderNotRegistered, ProviderChainExhausted} from "quiver/libraries/QuiverErrors.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-/// @notice Quiver randomness-failure and retry-liveness coverage for RaffledQuiver.
-contract RaffledQuiverRandomnessTest is QuiverBaseTest {
+/// @notice Quiver randomness-failure and retry-liveness coverage for WinrCore.
+contract WinrCoreRandomnessTest is QuiverBaseTest {
     bytes32 constant SALT_2 = keccak256("salt_2");
     bytes32 constant SALT_3 = keccak256("salt_3");
 
@@ -29,7 +29,7 @@ contract RaffledQuiverRandomnessTest is QuiverBaseTest {
 
         vm.prank(RESOLVER);
         vm.expectEmit(true, true, false, true);
-        emit RaffledQuiver.RandomnessRequestFailed(
+        emit WinrCore.RandomnessRequestFailed(
             raffleId, providerA, abi.encodeWithSelector(MockQuiverCoordinator.Paused.selector)
         );
         mgr.resolveRaffle(raffleId, SALT_1);
@@ -53,7 +53,7 @@ contract RaffledQuiverRandomnessTest is QuiverBaseTest {
 
         // Same salt rejected (already consumed even by the failed attempt).
         vm.prank(RESOLVER);
-        vm.expectRevert(RaffledQuiver.SaltAlreadyUsed.selector);
+        vm.expectRevert(WinrCore.SaltAlreadyUsed.selector);
         mgr.resolveRaffle(raffleId, SALT_1);
 
         // Fresh salt succeeds.
@@ -74,7 +74,7 @@ contract RaffledQuiverRandomnessTest is QuiverBaseTest {
 
         vm.prank(RESOLVER);
         vm.expectEmit(true, true, false, true);
-        emit RaffledQuiver.RandomnessRequestFailed(
+        emit WinrCore.RandomnessRequestFailed(
             raffleId, unregistered, abi.encodeWithSelector(ProviderNotRegistered.selector, unregistered)
         );
         mgr.resolveRaffle(raffleId, SALT_1);
@@ -103,7 +103,7 @@ contract RaffledQuiverRandomnessTest is QuiverBaseTest {
 
         vm.prank(RESOLVER);
         vm.expectEmit(true, true, false, true);
-        emit RaffledQuiver.RandomnessRequestFailed(
+        emit WinrCore.RandomnessRequestFailed(
             raffle2, shortChain, abi.encodeWithSelector(ProviderChainExhausted.selector, shortChain, 1)
         );
         mgr.resolveRaffle(raffle2, SALT_1);
@@ -120,7 +120,7 @@ contract RaffledQuiverRandomnessTest is QuiverBaseTest {
 
         vm.prank(RESOLVER);
         vm.expectEmit(true, true, false, true);
-        emit RaffledQuiver.RandomnessRequestFailed(raffleId, providerA, abi.encodeWithSelector(TooManyHashes.selector));
+        emit WinrCore.RandomnessRequestFailed(raffleId, providerA, abi.encodeWithSelector(TooManyHashes.selector));
         mgr.resolveRaffle(raffleId, SALT_1);
         assertEq(uint256(mgr.getRaffle(raffleId).status), 0);
 
@@ -140,7 +140,7 @@ contract RaffledQuiverRandomnessTest is QuiverBaseTest {
         _resolve(raffleId, SALT_1);
 
         vm.prank(RESOLVER);
-        vm.expectRevert(RaffledQuiver.StallTimeoutNotReached.selector);
+        vm.expectRevert(WinrCore.StallTimeoutNotReached.selector);
         mgr.retryResolve(raffleId, SALT_2);
     }
 
@@ -151,7 +151,7 @@ contract RaffledQuiverRandomnessTest is QuiverBaseTest {
         _resolve(raffleId, SALT_1);
         _warpStallTimeout();
 
-        vm.expectRevert(abi.encodeWithSelector(RaffledQuiver.NotResolver.selector, address(this)));
+        vm.expectRevert(abi.encodeWithSelector(WinrCore.NotResolver.selector, address(this)));
         mgr.retryResolve(raffleId, SALT_2);
     }
 
@@ -167,7 +167,7 @@ contract RaffledQuiverRandomnessTest is QuiverBaseTest {
         _warpStallTimeout();
         vm.prank(RESOLVER);
         vm.expectEmit(true, true, false, true);
-        emit RaffledQuiver.RaffleStalled(raffleId, 2);
+        emit WinrCore.RaffleStalled(raffleId, 2);
         mgr.retryResolve(raffleId, SALT_2);
 
         // Fallback provider B now services the raffle (fresh seq space starting at 1).
@@ -213,7 +213,7 @@ contract RaffledQuiverRandomnessTest is QuiverBaseTest {
 
         _warpStallTimeout();
         vm.prank(RESOLVER);
-        vm.expectRevert(RaffledQuiver.MaxAttemptsReached.selector);
+        vm.expectRevert(WinrCore.MaxAttemptsReached.selector);
         mgr.retryResolve(raffleId, keccak256("salt_4"));
     }
 
@@ -224,7 +224,7 @@ contract RaffledQuiverRandomnessTest is QuiverBaseTest {
         _resolveRevealSettle(raffleId);
 
         vm.prank(RESOLVER);
-        vm.expectRevert(abi.encodeWithSelector(RaffledQuiver.RaffleNotPendingVrf.selector, raffleId));
+        vm.expectRevert(abi.encodeWithSelector(WinrCore.RaffleNotPendingVrf.selector, raffleId));
         mgr.retryResolve(raffleId, SALT_2);
     }
 
@@ -248,7 +248,7 @@ contract RaffledQuiverRandomnessTest is QuiverBaseTest {
         // Retry is refused while a failed callback sits in the buffer.
         _warpStallTimeout();
         vm.prank(RESOLVER);
-        vm.expectRevert(RaffledQuiver.FailedCallbackPending.selector);
+        vm.expectRevert(WinrCore.FailedCallbackPending.selector);
         mgr.retryResolve(raffleId, SALT_2);
 
         // Poke re-delivers with full gas.
@@ -261,7 +261,7 @@ contract RaffledQuiverRandomnessTest is QuiverBaseTest {
         uint256 raffleId = _createERC20RaffleWithParams(TICKET_PRICE, 5, DURATION);
         _enterAs(ALICE, raffleId, 5);
 
-        vm.expectRevert(abi.encodeWithSelector(RaffledQuiver.RaffleNotPendingVrf.selector, raffleId));
+        vm.expectRevert(abi.encodeWithSelector(WinrCore.RaffleNotPendingVrf.selector, raffleId));
         mgr.pokeFailedCallback(raffleId);
     }
 
@@ -276,7 +276,7 @@ contract RaffledQuiverRandomnessTest is QuiverBaseTest {
         _resolve(raffleId, SALT_1);
 
         // PENDING, but not stalled past the timeout and attempts < max.
-        vm.expectRevert(RaffledQuiver.StalledConditionNotMet.selector);
+        vm.expectRevert(WinrCore.StalledConditionNotMet.selector);
         mgr.cancelStalledRaffle(raffleId);
     }
 
@@ -319,7 +319,7 @@ contract RaffledQuiverRandomnessTest is QuiverBaseTest {
         uint256 raffleId = _createERC20RaffleWithParams(TICKET_PRICE, 5, DURATION);
         _enterAs(ALICE, raffleId, 5);
 
-        vm.expectRevert(abi.encodeWithSelector(RaffledQuiver.RaffleNotPendingVrf.selector, raffleId));
+        vm.expectRevert(abi.encodeWithSelector(WinrCore.RaffleNotPendingVrf.selector, raffleId));
         mgr.cancelStalledRaffle(raffleId);
     }
 

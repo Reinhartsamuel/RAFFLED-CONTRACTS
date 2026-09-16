@@ -14,7 +14,7 @@ import {IERC721Receiver} from "@openzeppelin/contracts/token/ERC721/IERC721Recei
 import {IERC721Metadata} from "@openzeppelin/contracts/token/ERC721/extensions/IERC721Metadata.sol";
 import {FreeEntryVerifier2} from "./FreeEntryVerifier2.sol";
 
-/// @title  RaffledQuiver
+/// @title  WinrCore
 /// @notice Gas-optimised raffle system backed by Quiver VRF (push/callback flow) + a
 ///         self-operated resolver keeper, on Robinhood Chain. Replaces Chainlink VRF v2.5 +
 ///         Chainlink Automation used by `RaffledCore` (which stays untouched on Base).
@@ -47,7 +47,7 @@ import {FreeEntryVerifier2} from "./FreeEntryVerifier2.sol";
 ///   Storage packing: `RaffleData` is kept byte-identical to `RaffledCore` (5 EVM slots,
 ///   including the unused `ticketsSold`) so `getRaffle` ABI decoding is unaffected. All new
 ///   state lives in separate mappings.
-contract RaffledQuiver is QuiverConsumer, IERC721Receiver, ReentrancyGuard, FreeEntryVerifier2, Ownable2Step, Pausable {
+contract WinrCore is QuiverConsumer, IERC721Receiver, ReentrancyGuard, FreeEntryVerifier2, Ownable2Step, Pausable {
     using SafeERC20 for IERC20;
 
     // ──────────────────────────────────────────────────────────────────────
