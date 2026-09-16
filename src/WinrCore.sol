@@ -156,7 +156,6 @@ contract WinrCore is QuiverConsumer, IERC721Receiver, ReentrancyGuard, FreeEntry
     // uint256 public constant PROVIDER_TIMELOCK = 2 days;
     uint256 public constant PROVIDER_TIMELOCK = 2 seconds;
 
-
     uint256 public constant RESOLVE_GRACE = 72 hours;
     uint256 public constant STALL_TIMEOUT = 6 hours;
     uint8 public constant MAX_RESOLVE_ATTEMPTS = 3;
