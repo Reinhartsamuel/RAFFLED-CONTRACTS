@@ -205,6 +205,19 @@ export class ResolveJob {
   }
 
   async #resolveOne(raffleId: bigint, report: CycleReport): Promise<void> {
+    // A raffle that keeps failing stays in `pendingResolution` and would
+    // otherwise be re-simulated and re-sent on every single cycle. Back off per
+    // raffle after a failure so a stuck raffle cannot drain the RPC quota.
+    const cooldownUntil = this.#state.resolveCooldownUntil(raffleId);
+    if (cooldownUntil > Date.now()) {
+      report.resolveSkipped += 1;
+      this.#logger.debug('resolve in cooldown after a recent failure — skipping', {
+        raffleId,
+        retryInMs: cooldownUntil - Date.now(),
+      });
+      return;
+    }
+
     // At most two attempts: one fresh salt, plus one recovery attempt when the
     // contract rejects the salt or the fee balance (both recoverable).
     for (let attempt = 1; attempt <= 2; attempt += 1) {
@@ -224,8 +237,10 @@ export class ResolveJob {
             raffleId,
             tx: result.hash,
           });
+          this.#state.setResolveCooldown(raffleId, this.#cfg.resolveRetryCooldownMs);
           await this.#maybeCancelExpiredAfterGrace(raffleId);
         } else {
+          this.#state.clearResolveCooldown(raffleId);
           this.#logger.info('randomness requested', { raffleId, tx: result.hash });
         }
         return;
@@ -238,6 +253,7 @@ export class ResolveJob {
 
       if (result.kind === 'failed') {
         report.resolveFailed += 1;
+        this.#state.setResolveCooldown(raffleId, this.#cfg.resolveRetryCooldownMs);
         this.#alert.alert(
           'resolveRaffle transaction failed',
           { raffleId, error: result.error.shortMessage },
@@ -263,6 +279,7 @@ export class ResolveJob {
             continue;
           }
           report.resolveFailed += 1;
+          this.#state.setResolveCooldown(raffleId, this.#cfg.resolveRetryCooldownMs);
           this.#logger.error('fresh salt rejected twice — giving up on this raffle for now', { raffleId, reason: name });
           return;
 
@@ -280,11 +297,13 @@ export class ResolveJob {
           const funded = await this.#maybeFundFeeBalance(true);
           if (attempt === 1 && funded) continue;
           report.resolveFailed += 1;
+          this.#state.setResolveCooldown(raffleId, this.#cfg.resolveRetryCooldownMs);
           return;
         }
 
         case 'NotResolver':
           report.resolveFailed += 1;
+          this.#state.setResolveCooldown(raffleId, this.#cfg.resolveRetryCooldownMs);
           this.#alert.alert(
             'resolveRaffle reverted NotResolver — the keeper key is not allowlisted',
             {
@@ -298,6 +317,7 @@ export class ResolveJob {
 
         default:
           report.resolveFailed += 1;
+          this.#state.setResolveCooldown(raffleId, this.#cfg.resolveRetryCooldownMs);
           this.#logger.error('resolveRaffle reverted', {
             raffleId,
             reason: name ?? result.error.shortMessage,

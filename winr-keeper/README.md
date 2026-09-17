@@ -108,14 +108,16 @@ All config is env-driven; see `.env.example` for the full annotated list.
 | `RAFFLE_SETTLER_PRIVATE_KEY` | no | resolver key | Signer for permissionless `settle()`. |
 | `RAFFLE_CHAIN_ID` | no | auto-detect | Enforce chain id; mismatches abort startup. |
 | `RAFFLE_RESOLVE_BATCH` | no | `50` | `pendingResolution` / `stalledRaffles` page size. |
-| `RAFFLE_RESOLVE_INTERVAL_MS` | no | `120000` | Cron #1 cadence. |
-| `RAFFLE_SETTLE_INTERVAL_MS` | no | `45000` | Cron #2 cadence. |
-| `RAFFLE_MAX_SCAN_PASSES` | no | `1000` | Runaway guard for cursor loops. |
+| `RAFFLE_RESOLVE_INTERVAL_MS` | no | `300000` | Cron #1 cadence. |
+| `RAFFLE_RESOLVE_RETRY_COOLDOWN_MS` | no | `300000` | Skip a raffle for this long after a failed resolve (stops per-cycle retry loops). |
+| `RAFFLE_SETTLE_INTERVAL_MS` | no | `180000` | Cron #2 cadence. |
+| `RAFFLE_MAX_SCAN_PASSES` | no | `200` | Runaway guard for cursor loops. |
 | `RAFFLE_CANCEL_EXPIRED_AFTER_GRACE` | no | `false` | After `expiry + RESOLVE_GRACE` (72 h), cancel OPEN raffles whose on-chain request keeps failing (`RandomnessRequestFailed`) so entrants can `claimRefund`. |
 | `RAFFLE_LOG_LOOKBACK_BLOCKS` | no | `10000` | First-run lookback for `RandomnessFulfilled`. |
 | `RAFFLE_START_BLOCK` | no | — | Absolute first block to scan (deploy block). |
+| `RAFFLE_LOG_RPC_URL` | no | `RAFFLE_RPC_URL` | Separate RPC for the `eth_getLogs` scan only. Point it at a wide-range endpoint so a metered provider with a narrow range cap is not drained by the scan. |
 | `RAFFLE_LOG_CHUNK_SIZE` | no | `5000` | `eth_getLogs` chunking. Auto-shrinks to the provider's cap and is remembered; set explicitly to reset the learned size. |
-| `RAFFLE_LOG_MAX_REQUESTS_PER_CYCLE` | no | `500` | Cap on `eth_getLogs` calls per settle cycle; the scan cursor resumes next cycle. |
+| `RAFFLE_LOG_MAX_REQUESTS_PER_CYCLE` | no | `50` | Cap on `eth_getLogs` calls per settle cycle; the cursor resumes next cycle. When exhausted, the scan backs off (60 s doubling to 15 min). |
 | `RAFFLE_SETTLE_MAX_ATTEMPTS` | no | `5` | Drop + alert after this many failed settles. |
 | `RAFFLE_FEE_FUND_THRESHOLD` | no | disabled | Auto top-up the contract balance below this (wei). |
 | `RAFFLE_FEE_FUND_TARGET` | no | `fee × batch` | Top-up target (wei). |
@@ -165,8 +167,18 @@ There is no on-chain view for “RESOLVED and un-settled”, so the queue is der
    the same span instead of failing the whole scan; the working size is persisted
    in the state file and reused on later cycles/restarts. Each chunk is
    checkpointed, so a crash or the `RAFFLE_LOG_MAX_REQUESTS_PER_CYCLE` budget
-   resumes where it stopped rather than replaying the window. On a contract that
-   has no raffles yet, the first run skips the lookback and starts at head.
+   resumes where it stopped rather than replaying the window. When the budget is
+   exhausted the scan backs off (60 s, doubling to 15 min) instead of re-burning
+   the budget every cycle. On a contract that has no raffles yet, the first run
+   skips the lookback and starts at head.
+
+   > **Compute-unit note.** A narrow `eth_getLogs` cap is expensive on a fast
+   > chain: 10-block chunks cost ~7.5 CU per block scanned, so a chain producing
+   > ~9 blocks/s burns ~5.6 M CU/day just keeping the cursor at head. Set
+   > `RAFFLE_LOG_RPC_URL` to a wide-range endpoint (the chain's public RPC
+   > handles 100 k-block ranges) so the scan does not drain a metered provider.
+   > Stretching `RAFFLE_SETTLE_INTERVAL_MS` does **not** reduce this cost — the
+   > same blocks still have to be scanned.
 2. **Settle** — for each due queue item, `getRaffle(id)` is the source of truth:
    - `RESOLVED` → `settle(id)` (permissionless; any relayer could do it)
    - `PENDING_VRF` → the log was reorged away; drop (the resolve sweep handles the stall)

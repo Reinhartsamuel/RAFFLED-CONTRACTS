@@ -1,6 +1,6 @@
 import { winrCoreAbi } from './abi.ts';
 import { createAlerter } from './alerts.ts';
-import { createPublicContext, createWalletContext } from './chain.ts';
+import { createPublicContext, createRpcClient, createWalletContext } from './chain.ts';
 import { ConfigError, loadConfig, type KeeperConfig } from './config.ts';
 import { readContractConstants } from './contract.ts';
 import { isTransientError, sleep } from './errors.ts';
@@ -76,6 +76,14 @@ async function main(): Promise<void> {
 
     const constants = await readContractConstants(publicClient, cfg.contractAddress, logger);
 
+    // Route the expensive eth_getLogs scan to a separate RPC when configured,
+    // so a metered provider with a narrow range cap is not drained by it.
+    const logPublicClient =
+      cfg.logRpcUrl === cfg.rpcUrl ? publicClient : createRpcClient(cfg.logRpcUrl, chain);
+    if (logPublicClient !== publicClient) {
+      logger.info('settlement log scan uses a separate RPC', { logRpcUrl: cfg.logRpcUrl });
+    }
+
     const jobs: JobDefinition[] = [];
 
     if (cfg.jobs.resolve) {
@@ -146,6 +154,7 @@ async function main(): Promise<void> {
         cfg,
         logger: jobLogger,
         publicClient,
+        logPublicClient,
         sender: createTxSender({
           publicClient,
           walletClient,

@@ -9,6 +9,15 @@ import type { StateStore } from '../state.ts';
 import type { TxSender } from '../tx.ts';
 import { RaffleStatus, raffleStatusName } from '../types.ts';
 
+/**
+ * Quota protection for the fulfilled-log scan. When a scan cannot finish
+ * within its per-cycle request budget (the keeper is behind), pause the next
+ * scan for a growing window instead of re-burning the whole budget on the very
+ * next cycle. The window resets as soon as a scan catches up.
+ */
+const SCAN_BACKOFF_BASE_MS = 60_000;
+const SCAN_BACKOFF_MAX_MS = 15 * 60_000;
+
 interface ScanReport {
   logsSeen: number;
   enqueued: number;
@@ -20,6 +29,8 @@ export interface SettleJobDeps {
   cfg: KeeperConfig;
   logger: Logger;
   publicClient: PublicClient;
+  /** Client used only for the `eth_getLogs` scan (may be a wide-range RPC). */
+  logPublicClient: PublicClient;
   sender: TxSender;
   state: StateStore;
   alert: Alerter;
@@ -42,6 +53,7 @@ export class SettleJob {
   readonly #cfg: KeeperConfig;
   readonly #logger: Logger;
   readonly #publicClient: PublicClient;
+  readonly #logPublicClient: PublicClient;
   readonly #sender: TxSender;
   readonly #state: StateStore;
   readonly #alert: Alerter;
@@ -50,6 +62,7 @@ export class SettleJob {
     this.#cfg = deps.cfg;
     this.#logger = deps.logger;
     this.#publicClient = deps.publicClient;
+    this.#logPublicClient = deps.logPublicClient;
     this.#sender = deps.sender;
     this.#state = deps.state;
     this.#alert = deps.alert;
@@ -81,7 +94,15 @@ export class SettleJob {
   // ── Step 1: RandomnessFulfilled -> queue ──────────────────────────────────
 
   async #scanFulfilledLogs(): Promise<ScanReport> {
-    const latest = await this.#publicClient.getBlockNumber();
+    const backoffUntil = this.#state.scanBackoffUntil;
+    if (backoffUntil > Date.now()) {
+      this.#logger.debug('fulfilled-log scan in backoff — skipping this cycle', {
+        retryInMs: backoffUntil - Date.now(),
+      });
+      return { logsSeen: 0, enqueued: 0, requests: 0, budgetExhausted: false };
+    }
+
+    const latest = await this.#logPublicClient.getBlockNumber();
     let from: bigint;
 
     if (this.#state.lastScannedBlock !== null) {
@@ -128,7 +149,7 @@ export class SettleJob {
       maxRequests: this.#cfg.logMaxRequestsPerCycle,
       logger: this.#logger,
       fetchChunk: (fromBlock, toBlock) =>
-        this.#publicClient.getLogs({
+        this.#logPublicClient.getLogs({
           address: this.#cfg.contractAddress,
           event: randomnessFulfilledEvent,
           fromBlock,
@@ -153,11 +174,19 @@ export class SettleJob {
     });
 
     if (result.budgetExhausted) {
-      this.#logger.info('fulfilled-log scan request budget reached — will resume next cycle', {
+      const nextBackoff = Math.min(
+        this.#state.scanBackoffMs > 0 ? this.#state.scanBackoffMs * 2 : SCAN_BACKOFF_BASE_MS,
+        SCAN_BACKOFF_MAX_MS,
+      );
+      this.#state.setScanBackoff(nextBackoff);
+      this.#logger.info('fulfilled-log scan request budget reached — backing off before resuming', {
         requests: result.requests,
         lastScannedBlock: result.lastScannedBlock?.toString() ?? null,
         latestBlock: latest.toString(),
+        retryInMs: nextBackoff,
       });
+    } else {
+      this.#state.clearScanBackoff();
     }
 
     return {

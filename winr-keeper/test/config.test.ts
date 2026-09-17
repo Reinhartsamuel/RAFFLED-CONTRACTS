@@ -18,8 +18,9 @@ test('applies documented defaults', () => {
   const cfg = loadConfig(baseEnv(), []);
   assert.equal(cfg.contractAddress, CONTRACT);
   assert.equal(cfg.resolveBatch, 50n);
-  assert.equal(cfg.resolveIntervalMs, 120_000);
-  assert.equal(cfg.settleIntervalMs, 45_000);
+  assert.equal(cfg.resolveIntervalMs, 300_000);
+  assert.equal(cfg.resolveRetryCooldownMs, 300_000);
+  assert.equal(cfg.settleIntervalMs, 180_000);
   assert.equal(cfg.cancelExpiredAfterGrace, false);
   assert.equal(cfg.settleMaxAttempts, 5);
   assert.equal(cfg.dryRun, false);
@@ -30,7 +31,8 @@ test('applies documented defaults', () => {
   assert.equal(cfg.stateFile, './data/keeper-state.json');
   assert.equal(cfg.logChunkSize, 5_000n);
   assert.equal(cfg.logChunkSizeExplicit, false);
-  assert.equal(cfg.logMaxRequestsPerCycle, 500);
+  assert.equal(cfg.logMaxRequestsPerCycle, 50);
+  assert.equal(cfg.logRpcUrl, cfg.rpcUrl);
 });
 
 test('an explicit log chunk size is marked as an override', () => {
@@ -38,6 +40,23 @@ test('an explicit log chunk size is marked as an override', () => {
   assert.equal(cfg.logChunkSize, 10n);
   assert.equal(cfg.logChunkSizeExplicit, true);
   assert.equal(cfg.logMaxRequestsPerCycle, 250);
+});
+
+test('a separate log-scan RPC can be configured', () => {
+  const cfg = loadConfig(baseEnv({ RAFFLE_LOG_RPC_URL: 'https://rpc.testnet.chain.robinhood.com' }), []);
+  assert.equal(cfg.logRpcUrl, 'https://rpc.testnet.chain.robinhood.com');
+  assert.equal(cfg.rpcUrl, 'https://rpc.testnet.chain.robinhood.com');
+});
+
+test('rejects a malformed log-scan RPC URL', () => {
+  assert.throws(
+    () => loadConfig(baseEnv({ RAFFLE_LOG_RPC_URL: 'not-a-url' }), []),
+    (error: unknown) => {
+      assert.ok(error instanceof ConfigError);
+      assert.ok(error.problems.some((problem) => problem.includes('RAFFLE_LOG_RPC_URL')));
+      return true;
+    },
+  );
 });
 
 test('reports every missing required variable at once', () => {

@@ -13,6 +13,15 @@ export class ConfigError extends Error {
 
 export interface KeeperConfig {
   readonly rpcUrl: string;
+  /**
+   * Optional separate RPC for the `eth_getLogs` settlement scan. Managed
+   * providers cap the block span of one `eth_getLogs` call (Alchemy's free
+   * tier allows only 10 blocks), which on a fast chain makes the scan cost
+   * ~7.5 compute units per block. Pointing this at a wide-range endpoint keeps
+   * the expensive scan off the metered provider while `rpcUrl` still serves
+   * reads/writes. Defaults to `rpcUrl`.
+   */
+  readonly logRpcUrl: string;
   readonly contractAddress: Address;
   readonly chainId?: number;
   readonly resolverPrivateKey?: Hex;
@@ -20,6 +29,7 @@ export interface KeeperConfig {
   readonly jobs: { readonly resolve: boolean; readonly settle: boolean };
   readonly resolveBatch: bigint;
   readonly resolveIntervalMs: number;
+  readonly resolveRetryCooldownMs: number;
   readonly settleIntervalMs: number;
   readonly schedulerJitterMs: number;
   readonly maxScanPasses: number;
@@ -136,6 +146,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, argv: readonly 
     problems.push(`RAFFLE_RPC_URL must be an http(s) URL (got "${rpcUrl}")`);
   }
 
+  const logRpcRaw = raw('RAFFLE_LOG_RPC_URL');
+  if (logRpcRaw !== undefined && !/^https?:\/\//.test(logRpcRaw)) {
+    problems.push(`RAFFLE_LOG_RPC_URL must be an http(s) URL (got "${logRpcRaw}")`);
+  }
+  const logRpcUrl = logRpcRaw ?? rpcUrl;
+
   const contractRaw = required('RAFFLE_CONTRACT_ADDRESS');
   let contractAddress: Address | undefined;
   if (contractRaw !== undefined) {
@@ -220,22 +236,24 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, argv: readonly 
 
   return Object.freeze({
     rpcUrl: rpcUrl!,
+    logRpcUrl: logRpcUrl!,
     contractAddress: contractAddress!,
     chainId,
     resolverPrivateKey,
     settlerPrivateKey,
     jobs,
     resolveBatch: bigint('RAFFLE_RESOLVE_BATCH', 50n, 1n),
-    resolveIntervalMs: int('RAFFLE_RESOLVE_INTERVAL_MS', 120_000, 5_000, 86_400_000),
-    settleIntervalMs: int('RAFFLE_SETTLE_INTERVAL_MS', 45_000, 5_000, 86_400_000),
-    schedulerJitterMs: int('RAFFLE_SCHEDULER_JITTER_MS', 5_000, 0, 600_000),
-    maxScanPasses: int('RAFFLE_MAX_SCAN_PASSES', 1_000, 1, 1_000_000),
+    resolveIntervalMs: int('RAFFLE_RESOLVE_INTERVAL_MS', 300_000, 5_000, 86_400_000),
+    resolveRetryCooldownMs: int('RAFFLE_RESOLVE_RETRY_COOLDOWN_MS', 300_000, 0, 86_400_000),
+    settleIntervalMs: int('RAFFLE_SETTLE_INTERVAL_MS', 180_000, 5_000, 86_400_000),
+    schedulerJitterMs: int('RAFFLE_SCHEDULER_JITTER_MS', 15_000, 0, 600_000),
+    maxScanPasses: int('RAFFLE_MAX_SCAN_PASSES', 200, 1, 1_000_000),
     cancelExpiredAfterGrace: bool('RAFFLE_CANCEL_EXPIRED_AFTER_GRACE', false),
     settleMaxAttempts: int('RAFFLE_SETTLE_MAX_ATTEMPTS', 5, 1, 100),
     logLookbackBlocks: bigint('RAFFLE_LOG_LOOKBACK_BLOCKS', 10_000n, 0n),
     logChunkSize: bigint('RAFFLE_LOG_CHUNK_SIZE', 5_000n, 1n),
     logChunkSizeExplicit: raw('RAFFLE_LOG_CHUNK_SIZE') !== undefined,
-    logMaxRequestsPerCycle: int('RAFFLE_LOG_MAX_REQUESTS_PER_CYCLE', 500, 1, 1_000_000),
+    logMaxRequestsPerCycle: int('RAFFLE_LOG_MAX_REQUESTS_PER_CYCLE', 50, 1, 1_000_000),
     startBlock: optionalBigint('RAFFLE_START_BLOCK', 0n),
     feeFundThresholdWei: optionalBigint('RAFFLE_FEE_FUND_THRESHOLD', 0n),
     feeFundTargetWei: optionalBigint('RAFFLE_FEE_FUND_TARGET', 0n),

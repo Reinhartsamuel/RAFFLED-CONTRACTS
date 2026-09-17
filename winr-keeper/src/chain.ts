@@ -45,6 +45,11 @@ export interface PublicContext {
   publicClient: PublicClient;
 }
 
+/** Public client for an explicit RPC URL (used for the separate log-scan RPC). */
+export function createRpcClient(url: string, chain: Chain): PublicClient {
+  return createPublicClient({ chain, transport: http(url, { retryCount: 2, timeout: 30_000 }) });
+}
+
 export async function createPublicContext(cfg: KeeperConfig): Promise<PublicContext> {
   const transport = http(cfg.rpcUrl, { retryCount: 2, timeout: 30_000 });
   const probe = createPublicClient({ transport });

@@ -7,6 +7,7 @@ const STATE_VERSION = 1;
 const MAX_SETTLED_CACHE = 2_000;
 const MAX_SALTS_PER_RAFFLE = 64;
 const MAX_ABANDONED = 1_000;
+const MAX_RESOLVE_COOLDOWNS = 1_000;
 const FLUSH_DEBOUNCE_MS = 250;
 
 export interface QueueItem {
@@ -28,10 +29,16 @@ interface PersistedState {
   lastScannedBlock: string | null;
   /** Effective eth_getLogs chunk size learned from the provider's range cap. */
   logChunkSize: string | null;
+  /** Epoch ms until which the fulfilled-log scan is paused (quota protection). */
+  scanBackoffUntil: number;
+  /** Current scan backoff window in ms (doubles while the scan stays behind). */
+  scanBackoffMs: number;
   queue: QueueItem[];
   settled: string[];
   abandoned: AbandonedItem[];
   salts: Record<string, string[]>;
+  /** raffleId -> epoch ms before which a failed resolve must not be retried. */
+  resolveCooldowns: Record<string, number>;
 }
 
 function emptyState(): PersistedState {
@@ -39,10 +46,13 @@ function emptyState(): PersistedState {
     version: STATE_VERSION,
     lastScannedBlock: null,
     logChunkSize: null,
+    scanBackoffUntil: 0,
+    scanBackoffMs: 0,
     queue: [],
     settled: [],
     abandoned: [],
     salts: {},
+    resolveCooldowns: {},
   };
 }
 
@@ -85,10 +95,14 @@ export class StateStore implements SaltStorage {
           version: STATE_VERSION,
           lastScannedBlock: parsed.lastScannedBlock ?? null,
           logChunkSize: typeof parsed.logChunkSize === 'string' ? parsed.logChunkSize : null,
+          scanBackoffUntil: typeof parsed.scanBackoffUntil === 'number' ? parsed.scanBackoffUntil : 0,
+          scanBackoffMs: typeof parsed.scanBackoffMs === 'number' ? parsed.scanBackoffMs : 0,
           queue: Array.isArray(parsed.queue) ? parsed.queue : [],
           settled: Array.isArray(parsed.settled) ? parsed.settled : [],
           abandoned: Array.isArray(parsed.abandoned) ? parsed.abandoned : [],
           salts: parsed.salts && typeof parsed.salts === 'object' ? parsed.salts : {},
+          resolveCooldowns:
+            parsed.resolveCooldowns && typeof parsed.resolveCooldowns === 'object' ? parsed.resolveCooldowns : {},
         };
       } else {
         logger.warn('state file version mismatch — starting fresh', { file: absolute, found: parsed.version });
@@ -202,6 +216,62 @@ export class StateStore implements SaltStorage {
     if (this.#data.logChunkSize === size.toString()) return;
     this.#data.logChunkSize = size.toString();
     this.#scheduleFlush();
+  }
+
+  // ── Log-scan backoff (quota protection) ───────────────────────────────────
+
+  /**
+   * Epoch ms until which the fulfilled-log scan is paused. Set when a scan
+   * exhausts its per-cycle request budget (i.e. the keeper is behind), so a
+   * backlog cannot re-burn the full budget on every single cycle.
+   */
+  get scanBackoffUntil(): number {
+    return this.#data.scanBackoffUntil;
+  }
+
+  get scanBackoffMs(): number {
+    return this.#data.scanBackoffMs;
+  }
+
+  setScanBackoff(delayMs: number): void {
+    this.#data.scanBackoffMs = delayMs;
+    this.#data.scanBackoffUntil = Date.now() + delayMs;
+    this.#scheduleFlush();
+  }
+
+  clearScanBackoff(): void {
+    if (this.#data.scanBackoffUntil === 0 && this.#data.scanBackoffMs === 0) return;
+    this.#data.scanBackoffUntil = 0;
+    this.#data.scanBackoffMs = 0;
+    this.#scheduleFlush();
+  }
+
+  // ── Resolve retry cooldown ────────────────────────────────────────────────
+
+  resolveCooldownUntil(raffleId: bigint): number {
+    return this.#data.resolveCooldowns[raffleId.toString()] ?? 0;
+  }
+
+  setResolveCooldown(raffleId: bigint, delayMs: number): void {
+    this.#pruneResolveCooldowns();
+    this.#data.resolveCooldowns[raffleId.toString()] = Date.now() + delayMs;
+    this.#scheduleFlush();
+  }
+
+  clearResolveCooldown(raffleId: bigint): void {
+    const key = raffleId.toString();
+    if (this.#data.resolveCooldowns[key] === undefined) return;
+    delete this.#data.resolveCooldowns[key];
+    this.#scheduleFlush();
+  }
+
+  #pruneResolveCooldowns(): void {
+    const keys = Object.keys(this.#data.resolveCooldowns);
+    if (keys.length < MAX_RESOLVE_COOLDOWNS) return;
+    const now = Date.now();
+    for (const key of keys) {
+      if ((this.#data.resolveCooldowns[key] ?? 0) <= now) delete this.#data.resolveCooldowns[key];
+    }
   }
 
   // ── Salt registry (SaltStorage) ───────────────────────────────────────────
