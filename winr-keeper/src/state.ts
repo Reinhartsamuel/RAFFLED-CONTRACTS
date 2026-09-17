@@ -29,6 +29,8 @@ interface PersistedState {
   lastScannedBlock: string | null;
   /** Effective eth_getLogs chunk size learned from the provider's range cap. */
   logChunkSize: string | null;
+  /** RPC URL the learned chunk size belongs to (the cap is provider-specific). */
+  logChunkRpcUrl: string | null;
   /** Epoch ms until which the fulfilled-log scan is paused (quota protection). */
   scanBackoffUntil: number;
   /** Current scan backoff window in ms (doubles while the scan stays behind). */
@@ -46,6 +48,7 @@ function emptyState(): PersistedState {
     version: STATE_VERSION,
     lastScannedBlock: null,
     logChunkSize: null,
+    logChunkRpcUrl: null,
     scanBackoffUntil: 0,
     scanBackoffMs: 0,
     queue: [],
@@ -95,6 +98,7 @@ export class StateStore implements SaltStorage {
           version: STATE_VERSION,
           lastScannedBlock: parsed.lastScannedBlock ?? null,
           logChunkSize: typeof parsed.logChunkSize === 'string' ? parsed.logChunkSize : null,
+          logChunkRpcUrl: typeof parsed.logChunkRpcUrl === 'string' ? parsed.logChunkRpcUrl : null,
           scanBackoffUntil: typeof parsed.scanBackoffUntil === 'number' ? parsed.scanBackoffUntil : 0,
           scanBackoffMs: typeof parsed.scanBackoffMs === 'number' ? parsed.scanBackoffMs : 0,
           queue: Array.isArray(parsed.queue) ? parsed.queue : [],
@@ -207,13 +211,20 @@ export class StateStore implements SaltStorage {
    * Effective chunk size learned from the RPC provider's eth_getLogs range cap.
    * Persisted so the keeper does not have to rediscover (and burn requests on)
    * the cap after every restart. Null until the first successful scan.
+   *
+   * Scoped to the RPC URL: a cap learned from one provider is meaningless on
+   * another. After a provider switch (say, from a 10-block metered key to a
+   * wide-range RPC) the old value must be discarded, or the scan keeps asking
+   * for the narrow range and can never catch up to the chain head.
    */
-  get learnedLogChunkSize(): bigint | null {
+  learnedLogChunkSize(logRpcUrl: string): bigint | null {
+    if (this.#data.logChunkRpcUrl !== logRpcUrl) return null;
     return this.#data.logChunkSize === null ? null : BigInt(this.#data.logChunkSize);
   }
 
-  setLearnedLogChunkSize(size: bigint): void {
-    if (this.#data.logChunkSize === size.toString()) return;
+  setLearnedLogChunkSize(logRpcUrl: string, size: bigint): void {
+    if (this.#data.logChunkRpcUrl === logRpcUrl && this.#data.logChunkSize === size.toString()) return;
+    this.#data.logChunkRpcUrl = logRpcUrl;
     this.#data.logChunkSize = size.toString();
     this.#scheduleFlush();
   }

@@ -134,10 +134,12 @@ export class SettleJob {
     if (from > latest) return { logsSeen: 0, enqueued: 0, requests: 0, budgetExhausted: false };
 
     // Prefer the smallest learned chunk size so a provider with a narrow
-    // eth_getLogs cap is never asked for an oversized range again. An explicit
+    // eth_getLogs cap is never asked for an oversized range again. The learned
+    // value is scoped to the RPC URL it came from, so switching providers
+    // re-probes instead of reusing the old provider's cap. An explicit
     // RAFFLE_LOG_CHUNK_SIZE always wins (reset after switching providers).
     const configured = this.#cfg.logChunkSize;
-    const learned = this.#state.learnedLogChunkSize;
+    const learned = this.#state.learnedLogChunkSize(this.#cfg.logRpcUrl);
     const chunkSize =
       this.#cfg.logChunkSizeExplicit || learned === null ? configured : learned < configured ? learned : configured;
 
@@ -168,7 +170,7 @@ export class SettleJob {
       // last successful chunk instead of replaying the whole window.
       onCheckpoint: async (lastScannedBlock, effectiveChunkSize) => {
         this.#state.setScannedBlock(lastScannedBlock);
-        this.#state.setLearnedLogChunkSize(effectiveChunkSize);
+        this.#state.setLearnedLogChunkSize(this.#cfg.logRpcUrl, effectiveChunkSize);
         await this.#state.flush();
       },
     });

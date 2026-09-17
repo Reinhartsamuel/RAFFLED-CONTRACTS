@@ -116,7 +116,7 @@ All config is env-driven; see `.env.example` for the full annotated list.
 | `RAFFLE_LOG_LOOKBACK_BLOCKS` | no | `10000` | First-run lookback for `RandomnessFulfilled`. |
 | `RAFFLE_START_BLOCK` | no | — | Absolute first block to scan (deploy block). |
 | `RAFFLE_LOG_RPC_URL` | no | `RAFFLE_RPC_URL` | Separate RPC for the `eth_getLogs` scan only. Point it at a wide-range endpoint so a metered provider with a narrow range cap is not drained by the scan. |
-| `RAFFLE_LOG_CHUNK_SIZE` | no | `5000` | `eth_getLogs` chunking. Auto-shrinks to the provider's cap and is remembered; set explicitly to reset the learned size. |
+| `RAFFLE_LOG_CHUNK_SIZE` | no | `5000` | `eth_getLogs` chunking. Auto-shrinks to the provider's cap and is remembered per RPC URL (changing `RAFFLE_LOG_RPC_URL` re-probes); set explicitly to reset the learned size. |
 | `RAFFLE_LOG_MAX_REQUESTS_PER_CYCLE` | no | `50` | Cap on `eth_getLogs` calls per settle cycle; the cursor resumes next cycle. When exhausted, the scan backs off (60 s doubling to 15 min). |
 | `RAFFLE_SETTLE_MAX_ATTEMPTS` | no | `5` | Drop + alert after this many failed settles. |
 | `RAFFLE_FEE_FUND_THRESHOLD` | no | disabled | Auto top-up the contract balance below this (wei). |
@@ -165,7 +165,11 @@ There is no on-chain view for “RESOLVED and un-settled”, so the queue is der
    `eth_getLogs` call (Alchemy's free tier allows only 10 blocks), so the scanner
    reads the provider's error, shrinks the chunk to the allowed range and retries
    the same span instead of failing the whole scan; the working size is persisted
-   in the state file and reused on later cycles/restarts. Each chunk is
+   in the state file, keyed to the RPC URL it was learned from, and reused on
+   later cycles/restarts. Switching `RAFFLE_LOG_RPC_URL` therefore re-probes with
+   `RAFFLE_LOG_CHUNK_SIZE` instead of inheriting the previous provider's cap — a
+   10-block cap learned from a metered key must never be applied to a wide-range
+   endpoint, or the scan can never catch up to head. Each chunk is
    checkpointed, so a crash or the `RAFFLE_LOG_MAX_REQUESTS_PER_CYCLE` budget
    resumes where it stopped rather than replaying the window. When the budget is
    exhausted the scan backs off (60 s, doubling to 15 min) instead of re-burning

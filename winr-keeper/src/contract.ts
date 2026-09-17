@@ -42,6 +42,17 @@ const DAY = 86_400n;
 const HOUR = 3_600n;
 
 /**
+ * viem decodes ABI integers narrower than 128 bits as JS `number`, not `bigint`
+ * (`uint8`, `uint48`, `uint64`, `uint96`). The view interfaces below declare
+ * those fields as `bigint` because callers do bigint arithmetic on them
+ * (`expiry + HARD_DEADLINE`), so coerce at the decode boundary — mixing a
+ * `number` into bigint arithmetic throws "Cannot mix BigInt and other types".
+ */
+function toBigint(value: bigint | number): bigint {
+  return typeof value === 'bigint' ? value : BigInt(value);
+}
+
+/**
  * The contract exposes MAX_RESOLVE_ATTEMPTS / STALL_TIMEOUT / HARD_DEADLINE /
  * RESOLVE_GRACE as public constants. Read them once at startup (with safe
  * fallbacks) so the keeper tracks the deployed values, not hardcoded ones.
@@ -101,7 +112,8 @@ export async function getRaffleView(
     functionName: 'getRaffle',
     args: [raffleId],
   })) as unknown as RaffleView;
-  return raffle;
+  // `expiry` (uint48) and `ticketsSold` (uint96) decode as numbers.
+  return { ...raffle, expiry: toBigint(raffle.expiry), ticketsSold: toBigint(raffle.ticketsSold) };
 }
 
 export async function getResolutionStateView(
@@ -115,7 +127,12 @@ export async function getResolutionStateView(
     functionName: 'getResolutionState',
     args: [raffleId],
   })) as unknown as ResolutionStateView;
-  return state;
+  // `activeSequence` (uint64) and `lastRequestedAt` (uint48) decode as numbers.
+  return {
+    ...state,
+    activeSequence: toBigint(state.activeSequence),
+    lastRequestedAt: toBigint(state.lastRequestedAt),
+  };
 }
 
 /** True when the receipt contains the given WinrCore event. */
